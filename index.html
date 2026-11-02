@@ -1,0 +1,555 @@
+<meta charset="utf-8">
+<title>Atlas des entrepôts France</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: a fixed control rail on the left (stacked on top at phone width), the map fills the rest. */
+:root {
+  --bg: #f3f4f1; --panel: #fbfbf9; --ink: #1d2124; --muted: #5f676d; --line: #d9ddd8; --land: #e6e8e2; --land-line: #c3c8c0;
+  --c-3pl: #1f5fbf; --c-inhouse: #d07a12; --c-mixed: #8a3fa8; --c-unknown: #8b9196;
+  --focus: #1f5fbf; --chip: #eceee9;
+  --road-a: #c8553d; --road-n: #d9a23a; --c-vacant: #7b3fa0; --c-client: #0b7a52; --region-line: #9aa39b; --city: #2b3034; --city-halo: rgba(243,244,241,.9);
+  --f-ui: "IBM Plex Sans Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #15181a; --panel: #1c2023; --ink: #e7eae8; --muted: #9aa3a8; --line: #30363a; --land: #23282b; --land-line: #3a4145;
+  --c-3pl: #5b9bff; --c-inhouse: #f0a040; --c-mixed: #c27be0; --c-unknown: #8d959b; --focus: #5b9bff; --chip: #262b2f; --road-a: #e07a5f; --road-n: #c9a04a; --c-vacant: #c792ea; --c-client: #3ecf8e; --region-line: #59636a; --city: #e7eae8; --city-halo: rgba(21,24,26,.85); color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #15181a; --panel: #1c2023; --ink: #e7eae8; --muted: #9aa3a8; --line: #30363a; --land: #23282b; --land-line: #3a4145;
+  --c-3pl: #5b9bff; --c-inhouse: #f0a040; --c-mixed: #c27be0; --c-unknown: #8d959b; --focus: #5b9bff; --chip: #262b2f; --road-a: #e07a5f; --road-n: #c9a04a; --c-vacant: #c792ea; --c-client: #3ecf8e; --region-line: #59636a; --city: #e7eae8; --city-halo: rgba(21,24,26,.85); color-scheme: dark }
+html, body { height: 100%; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-ui); font-size: 14px; }
+.app { display: grid; grid-template-columns: 340px 1fr; height: 100%; }
+aside { background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; display: flex; flex-direction: column; gap: 18px;
+  padding-block: 18px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: 16px; }
+h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
+.sub { color: var(--muted); margin: 4px 0 0; line-height: 1.4; }
+.count { font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-size: 30px; font-weight: 500; line-height: 1; }
+.count small { font-family: var(--f-ui); font-size: 13px; color: var(--muted); font-weight: 400; }
+.block { display: flex; flex-direction: column; gap: 8px; }
+.label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--chip); color: var(--ink);
+  border-radius: 999px; padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+.chip[aria-pressed="false"] { opacity: .45; }
+.chip .n { font-family: var(--f-mono); font-size: 11px; color: var(--muted); }
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
+.sq { border-radius: 2px; }
+select, input[type=search] { width: 100%; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px; }
+button:focus-visible, select:focus-visible, input:focus-visible, .chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.jump { display: flex; flex-wrap: wrap; gap: 4px; }
+.jump button { font: inherit; font-size: 12px; border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 4px; padding: 3px 7px; cursor: pointer; }
+.groupbar { border: 1px solid var(--c-3pl); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+.groupbar b { font-size: 15px; }
+.linkbtn { font: inherit; color: var(--focus); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; text-decoration: underline; }
+.note { font-size: 12px; color: var(--muted); line-height: 1.45; }
+.bars { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.bar { display: grid; grid-template-columns: 110px 1fr 46px; align-items: center; gap: 6px; }
+.bar i { height: 6px; border-radius: 3px; background: var(--muted); opacity: .55; display: block; }
+.bar span:last-child { font-family: var(--f-mono); text-align: right; font-variant-numeric: tabular-nums; }
+main { position: relative; min-width: 0; }
+#map { position: absolute; inset: 0; background: var(--bg); }
+/* Leaflet essentials (inlined: the CDN stylesheet cannot load here) */
+.leaflet-pane, .leaflet-tile, .leaflet-marker-icon, .leaflet-marker-shadow, .leaflet-tile-container, .leaflet-pane > svg, .leaflet-pane > canvas, .leaflet-zoom-box, .leaflet-image-layer, .leaflet-layer { position: absolute; left: 0; top: 0; }
+.leaflet-container { overflow: hidden; outline: 0; font-family: var(--f-ui); -webkit-tap-highlight-color: transparent; }
+.leaflet-pane { z-index: 400; } .leaflet-overlay-pane { z-index: 400; } .leaflet-marker-pane { z-index: 600; } .leaflet-popup-pane { z-index: 700; }
+.leaflet-map-pane canvas { z-index: 100; } .leaflet-map-pane svg { z-index: 200; }
+.leaflet-zoom-animated { transform-origin: 0 0; }
+.leaflet-zoom-anim .leaflet-zoom-animated { transition: transform .25s cubic-bezier(0,0,.25,1); }
+.leaflet-interactive { cursor: pointer; } .leaflet-grab { cursor: grab; } .leaflet-dragging .leaflet-grab { cursor: move; }
+.leaflet-control-container .leaflet-top, .leaflet-control-container .leaflet-bottom { position: absolute; z-index: 1000; pointer-events: none; }
+.leaflet-top { top: 0; } .leaflet-right { right: 0; } .leaflet-bottom { bottom: 0; } .leaflet-left { left: 0; }
+.leaflet-control { position: relative; z-index: 800; pointer-events: auto; float: left; clear: both; }
+.leaflet-top .leaflet-control { margin-top: 10px; } .leaflet-right .leaflet-control { float: right; margin-right: max(10px, env(safe-area-inset-right, 0px)); }
+.leaflet-bar { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--panel); }
+.leaflet-bar a { display: block; width: 32px; height: 32px; line-height: 32px; text-align: center; text-decoration: none; color: var(--ink); font-size: 18px; border-bottom: 1px solid var(--line); }
+.leaflet-bar a:last-child { border-bottom: 0; }
+.leaflet-popup { position: absolute; text-align: left; margin-bottom: 18px; }
+.leaflet-popup-content-wrapper { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.18); }
+.leaflet-popup-content { margin: 12px 14px; width: 310px !important; max-width: 70vw; line-height: 1.4; }
+.leaflet-popup-tip-container { width: 40px; height: 20px; position: absolute; left: 50%; margin-left: -20px; overflow: hidden; pointer-events: none; }
+.leaflet-popup-tip { width: 14px; height: 14px; margin: -8px auto 0; transform: rotate(45deg); background: var(--panel); border: 1px solid var(--line); }
+.leaflet-popup-close-button { position: absolute; top: 4px; right: 6px; color: var(--muted); text-decoration: none; font-size: 20px; }
+.pop h3 { margin: 0 18px 6px 0; font-size: 15px; line-height: 1.25; }
+.pop .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.pop .tag { font-size: 11px; border-radius: 4px; padding: 2px 6px; background: var(--chip); border: 1px solid var(--line); }
+.pop dl { display: grid; grid-template-columns: 92px 1fr; gap: 3px 8px; margin: 0; font-size: 12.5px; }
+.pop dt { color: var(--muted); } .pop dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.mono { font-family: var(--f-mono); font-size: 11.5px; }
+.pop .actions { display: flex; gap: 12px; margin-top: 10px; flex-wrap: wrap; font-size: 12.5px; }
+.pop a { color: var(--focus); }
+.pop .cl { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 12.5px; }
+.pop .cl h4 { margin: 0 0 4px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.pop .cl ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; }
+.pop .cl .st { font-size: 11px; border-radius: 4px; padding: 1px 5px; border: 1px solid var(--c-client); color: var(--c-client); white-space: nowrap; }
+.pop .cl .st.hyp { border-style: dashed; border-color: var(--muted); color: var(--muted); }
+.pop .cl .st.hist, .pop .cl .st.com { border-color: var(--line); color: var(--muted); }
+.check { display: flex; gap: 8px; align-items: center; font-size: 13px; cursor: pointer; }
+.ring { display: inline-block; width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--c-client); vertical-align: -1px; }
+.styles-btn { display: flex; align-items: center; gap: 6px; font: inherit; font-size: 13px; font-weight: 600; color: var(--ink); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+.styles-panel { margin-top: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px; width: 236px;
+  box-shadow: 0 6px 24px rgba(0,0,0,.18); display: flex; flex-direction: column; gap: 10px; }
+.style-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.style-card { font: inherit; font-size: 12.5px; text-align: left; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px; cursor: pointer; display: flex; flex-direction: column; gap: 5px; }
+.style-card[aria-pressed="true"] { border-color: var(--focus); box-shadow: inset 0 0 0 1px var(--focus); }
+.style-card svg { width: 100%; height: 44px; border-radius: 4px; display: block; }
+.layer-list { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.layer-list label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.swatch { width: 18px; height: 0; border-top: 3px solid; display: inline-block; }
+.city-label { pointer-events: none; white-space: nowrap; font-size: 11px; font-weight: 600; color: var(--city);
+  text-shadow: 0 0 3px var(--city-halo), 0 0 3px var(--city-halo), 0 0 2px var(--city-halo); transform: translate(6px, -50%); }
+.city-label.big { font-size: 12.5px; font-weight: 700; }
+.city-label::before { content: ""; position: absolute; left: -7px; top: 50%; width: 5px; height: 5px; margin-top: -2.5px; border-radius: 50%; background: var(--city); box-shadow: 0 0 0 1.5px var(--city-halo); }
+.leaflet-marker-icon.city-label { position: absolute; }
+@media (max-width: 760px) {
+  .app { grid-template-columns: 1fr; grid-template-rows: auto 70vh; height: auto; }
+  aside { border-right: 0; border-bottom: 1px solid var(--line); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  main { height: 70vh; }
+}
+@media (prefers-reduced-motion: reduce) { .leaflet-zoom-anim .leaflet-zoom-animated { transition: none; } }
+</style>
+
+<div class="app">
+  <aside>
+    <div>
+      <h1>Atlas des entrepôts France</h1>
+      <p class="sub">Sites d'entreposage identifiés par l'ICPE (Géorisques) et SIRENE, consolidés par groupe. Base au 31/10/2026.</p>
+    </div>
+    <div class="block">
+      <div class="count" id="count">–<small> sites affichés</small></div>
+      <div class="bars" id="bars"></div>
+    </div>
+    <div id="groupbar" class="groupbar" hidden>
+      <span class="label">Groupe isolé</span>
+      <b id="gname"></b>
+      <span class="note" id="ginfo"></span>
+      <button class="linkbtn" id="gclear" type="button">Afficher tous les groupes</button>
+    </div>
+    <div class="block">
+      <span class="label">Type d'entrepôt</span>
+      <div class="chips" id="types"></div>
+    </div>
+    <div class="block">
+      <span class="label">Niveau de confiance</span>
+      <div class="chips" id="confs"></div>
+    </div>
+    <div class="block">
+      <label class="label" for="gsearch">Groupe ou client</label>
+      <input type="search" id="gsearch" list="glist" placeholder="Ex. STEF, Lactalis, Carrefour…" autocomplete="off">
+      <datalist id="glist"></datalist>
+    </div>
+    <label class="check"><input type="checkbox" id="clientOnly"> <span class="ring" aria-hidden="true"></span>Entrepôts avec client du 3PL identifié (<span id="clientCount">0</span>)</label>
+    <div class="row2">
+      <div class="block"><label class="label" for="region">Région</label><select id="region"></select></div>
+      <div class="block"><label class="label" for="dept">Département</label><select id="dept"></select></div>
+    </div>
+    <div class="block"><label class="label" for="sector">Secteur</label><select id="sector"></select></div>
+    <div class="block"><label class="label" for="sub">Sous-type</label><select id="sub"></select></div>
+    <div class="block">
+      <span class="label">Taille de l'entrepôt</span>
+      <div class="row2">
+        <div class="block"><label class="label" for="surf">Emprise bâtie</label><select id="surf"></select></div>
+        <div class="block"><label class="label" for="vol">Volume ICPE</label><select id="vol"></select></div>
+      </div>
+    </div>
+    <div class="block">
+      <span class="label">Société exploitante</span>
+      <div class="row2">
+        <div class="block"><label class="label" for="ca">Chiffre d'affaires</label><select id="ca"></select></div>
+        <div class="block"><label class="label" for="cat">Catégorie</label><select id="cat"></select></div>
+      </div>
+      <div class="block"><label class="label" for="eff">Effectif</label><select id="eff"></select></div>
+      <div class="block"><label class="label" for="naf">Activité (NAF)</label><select id="naf"></select></div>
+    </div>
+    <div class="block">
+      <span class="label">Aller à</span>
+      <div class="jump" id="jump"></div>
+    </div>
+    <p class="note">Rond plein : 3PL. Carré : entrepôt en propre (industriel ou distributeur). Cercle violet en pointillé : entrepôt probablement vacant (exploitant parti, bâtiment toujours présent). Les sites « à vérifier » proviennent de SIRENE seul. Les agences transport et messagerie des groupes 3PL ont leur propre sous-type : filtrez-le pour ne garder que les entrepôts. Les coordonnées au centre de la commune sont signalées dans la fiche. Anneau vert : client du 3PL connu sur le site (plein : confirmé ou probable ; pointillé : hypothèse) ; anneau gris : relation terminée. Les clients viennent de la recherche documentaire (communiqués, presse, registres) ; les hypothèses faibles (niveau D) ne sont pas affichées. Chiffre d'affaires, catégorie (INSEE), effectif et activité sont ceux de la société exploitante (derniers comptes publiés, SIRENE) ; ils ne s'appliquent pas aux entrepôts probablement vacants. Emprise bâtie : surface au sol du bâtiment RNB rattaché au point (un même bâtiment peut porter plusieurs sites, et un rapprochement douteux est signalé dans la fiche). Volume ICPE : volume autorisé au titre de la rubrique 1510 (entrepôts couverts classés), inconnu pour les autres sites.</p>
+  </aside>
+  <main><div id="map" role="region" aria-label="Carte des entrepôts"></div></main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+<script src="deps.js" charset="utf-8"></script>
+<script src="fond.js" charset="utf-8"></script>
+<script src="sites.js" charset="utf-8"></script>
+<script src="vacants.js" charset="utf-8"></script>
+<script src="clients.js" charset="utf-8"></script>
+<script src="entreprises.js" charset="utf-8"></script>
+<script>
+(function () {
+  const D = window.DICT, S = window.SITES;
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const TYPES = [["3PL", "3PL", "--c-3pl"], ["IN_HOUSE", "En propre", "--c-inhouse"], ["MIXED", "Mixte", "--c-mixed"], ["UNKNOWN", "Exploitant inconnu", "--c-unknown"], ["VACANT", "Probablement vacant", "--c-vacant"]];
+  const CONFS = [["HIGH", "Haute"], ["MEDIUM", "Moyenne"], ["LOW", "Faible"]];
+  const FR = { ON_SITE: "sur le site de l'usine", ADJACENT: "attenant à l'usine", NEARBY: "proche de l'usine", REMOTE: "déporté", UNKNOWN: "non vérifiée" };
+  const GEO = { ICPE_GEORISQUES: "coordonnées Géorisques", BAN_HOUSENUMBER: "adresse au numéro (BAN)", BAN_STREET: "rue (BAN)", BAN_LOCALITY: "lieu-dit (BAN)", COMMUNE_CENTROID: "centre de la commune" };
+  const VER = { CONFIRMED: "confirmé", STORAGE_FUNCTION_CONFIRMED: "fonction de stockage confirmée", CONFIRMED_OPERATOR_TO_VERIFY: "exploitant à vérifier", TO_VERIFY: "à vérifier",
+    TO_VERIFY_BUILDING_FOUND: "à vérifier, grand bâtiment présent", TO_VERIFY_SMALL_BUILDING: "à vérifier, bâtiment trop petit pour un entrepôt",
+    OPERATOR_CHANGED_TO_VERIFY: "nouvel exploitant probable, à vérifier", OPERATOR_CLOSED_TO_VERIFY: "SIRET de l'exploitant fermé, aucun remplaçant trouvé" };
+  const st = { types: new Set(["3PL", "IN_HOUSE", "MIXED", "UNKNOWN", "VACANT"]), confs: new Set(["HIGH", "MEDIUM", "LOW"]), region: "", dept: "", sector: "", sub: "", group: null, gtext: "", clientOnly: false, ca: "", cat: "", eff: "", naf: "", surf: "", vol: "" };
+  const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const gname = i => D.group[i].split("|")[0];
+
+  // 3PL clients from the client research (clients.js, built by work/sites/map_clients.py)
+  const C = window.CLIENTS || { R: [], site: {}, commune: {}, signal: {} };
+  const CST = { SITE: ["confirmé sur site", ""], PROBABLE: ["site probable", ""], HYPOTHESE: ["hypothèse", "hyp"], HIST: ["terminée", "hist"], COMMUNE: ["dans la commune", "com"] };
+  const CL = S.map(s => C.site[s[12]] || []);
+  const CLTXT = S.map((s, i) => CL[i].concat(C.commune[s[12]] || []).map(k => C.R[k][0]).join(" ").toLowerCase());
+  const ring = i => {
+    const st = CL[i].map(k => C.R[k][2]);
+    return st.some(x => x === "SITE" || x === "PROBABLE") ? "full" : st.includes("HYPOTHESE") ? "dash" : st.includes("HIST") ? "hist" : "";
+  };
+  const RING = S.map((s, i) => ring(i));
+  const ringStyle = i => RING[i] === "" ? { color: "#ffffff", weight: 0.8, opacity: 0.55, dashArray: null }
+    : { color: css(RING[i] === "hist" ? "--c-unknown" : "--c-client"), weight: 2.2, opacity: 1, dashArray: RING[i] === "dash" ? "2 2" : null };
+  function clientsHtml(id) {
+    const li = k => {
+      const [client, grp, sta, lvl, d0, d1, url, why] = C.R[k], [lab, cls] = CST[sta] || [sta, ""];
+      const when = d0 || d1 ? ` <span class="note">${esc(d0 || "?")}${d1 ? " – " + esc(d1) : ""}</span>` : "";
+      return `<li title="${esc(why)}"><b>${esc(client)}</b> · ${esc(grp)} <span class="st ${cls}">${lab}, niveau ${esc(lvl)}</span>${when}`
+        + (url ? ` <a href="${esc(url)}" target="_blank" rel="noopener">source</a>` : "") + `</li>`;
+    };
+    const site = C.site[id] || [], com = C.commune[id] || [];
+    return (site.length ? `<div class="cl"><h4>Clients du 3PL sur ce site</h4><ul>${site.map(li).join("")}</ul></div>` : "")
+      + (com.length ? `<div class="cl"><h4>Clients du groupe dans la commune (bâtiment non identifié)</h4><ul>${com.map(li).join("")}</ul></div>` : "");
+  }
+  const signalRow = id => { const g = C.signal[id]; return g ? `<dt>Signal</dt><dd>${esc(g[0])}<br><span class="note">${esc(g[1])}</span></dd>` : ""; };
+
+  // operating company: [revenue k€, accounts year, INSEE category, company headcount band, site headcount band, APE] (entreprises.js, built by work/sites/map_entreprises.py)
+  const ENT = window.ENT || { s: {}, naf: { sub: {}, div: {} } };
+  const E = S.map(s => ENT.s[s[12]] || null);
+  const CA_CL = [["0", "Moins de 2 M€", 0, 2e3], ["1", "2 à 10 M€", 2e3, 1e4], ["2", "10 à 50 M€", 1e4, 5e4], ["3", "50 à 250 M€", 5e4, 2.5e5], ["4", "250 M€ à 1,5 Md€", 2.5e5, 1.5e6], ["5", "1,5 Md€ et plus", 1.5e6, Infinity]];
+  const caClass = e => { if (!e || e[0] === null) return "nr"; const c = CA_CL.find(x => e[0] >= x[2] && e[0] < x[3]); return c ? c[0] : "nr"; };
+  const CATS = [["GE", "Grande entreprise"], ["ETI", "Entreprise de taille intermédiaire"], ["PME", "PME"]];
+  const EFF_CL = [["0", "Moins de 10", ["00", "01", "02", "03"]], ["1", "10 à 49", ["11", "12"]], ["2", "50 à 249", ["21", "22", "31"]], ["3", "250 à 999", ["32", "41"]], ["4", "1 000 à 4 999", ["42", "51"]], ["5", "5 000 et plus", ["52", "53"]]];
+  const effClass = e => { const c = e && e[3] ? EFF_CL.find(x => x[2].includes(e[3])) : null; return c ? c[0] : "nr"; };
+  const TRANCHE = { "00": "0 salarié", "01": "1 ou 2", "02": "3 à 5", "03": "6 à 9", "11": "10 à 19", "12": "20 à 49", "21": "50 à 99", "22": "100 à 199", "31": "200 à 249",
+    "32": "250 à 499", "41": "500 à 999", "42": "1 000 à 1 999", "51": "2 000 à 4 999", "52": "5 000 à 9 999", "53": "10 000 et plus" };
+  const ECA = E.map(caClass), EEFF = E.map(effClass), ECAT = E.map(e => e && e[2] ? e[2] : "nr"), ENAF = E.map(e => e && e[5] && ENT.naf.div[e[5].slice(0, 2)] ? e[5].slice(0, 2) : "nr");
+  // warehouse size: RNB building footprint (s[27], m²) and ICPE 1510 volume (s[23], m³)
+  const SURF_CL = [["0", "Moins de 1 000 m²", 0, 1e3], ["1", "1 000 à 5 000 m²", 1e3, 5e3], ["2", "5 000 à 10 000 m²", 5e3, 1e4], ["3", "10 000 à 20 000 m²", 1e4, 2e4], ["4", "20 000 à 50 000 m²", 2e4, 5e4], ["5", "50 000 m² et plus", 5e4, Infinity]];
+  const VOL_CL = [["0", "Moins de 50 000 m³", 0, 5e4], ["1", "50 000 à 150 000 m³", 5e4, 1.5e5], ["2", "150 000 à 300 000 m³", 1.5e5, 3e5], ["3", "300 000 à 600 000 m³", 3e5, 6e5], ["4", "600 000 m³ et plus", 6e5, Infinity]];
+  const sizeClass = (v, cl) => { const n = +v; if (!(n > 0)) return "nr"; return cl.find(x => n >= x[2] && n < x[3])[0]; };
+  const ESURF = S.map(s => sizeClass(s[27], SURF_CL)), EVOL = S.map(s => sizeClass(s[23], VOL_CL));
+  const fmtCA = k => k >= 1e6 ? (k / 1e6).toLocaleString("fr-FR", { maximumFractionDigits: 2 }) + " Md€" : k >= 1e3 ? (k / 1e3).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " M€" : k.toLocaleString("fr-FR") + " k€";
+  function companyRows(i) {
+    const e = E[i]; if (!e) return "";
+    const row = (k, v) => v ? `<dt>${k}</dt><dd>${v}</dd>` : "";
+    return row("Chiffre d'affaires", e[0] !== null ? `<span class="mono">${fmtCA(e[0])}</span> <span class="note">(comptes ${e[1]})</span>` : "")
+      + row("Catégorie", esc((CATS.find(c => c[0] === e[2]) || [, e[2]])[1]))
+      + row("Effectif", [e[3] ? `société : ${TRANCHE[e[3]] || e[3]}` : "", e[4] ? `site : ${TRANCHE[e[4]] || e[4]}` : ""].filter(Boolean).join(" · "))
+      + row("Activité (NAF)", e[5] ? `<span class="mono">${esc(e[5])}</span> ${esc(ENT.naf.sub[e[5]] || "")}` : "");
+  }
+
+  // group index: id -> sites
+  // group index: a site belongs to its operator's group and to the groups of its other occupants
+  const gidKey = new Map(D.group.map((g, k) => [g.split("|")[1], k]));
+  const byGroup = new Map();
+  const addTo = (k, i) => { if (!byGroup.has(k)) byGroup.set(k, []); byGroup.get(k).push(i); };
+  S.forEach((s, i) => {
+    addTo(s[7], i);
+    (s[30] || "").split(",").forEach(gid => { const k = gidKey.get(gid); if (k !== undefined && k !== s[7]) addTo(k, i); });
+  });
+  const inGroup = new Map([...byGroup].map(([k, ids]) => [k, new Set(ids)]));
+
+  const map = L.map("map", { preferCanvas: true, zoomSnap: 0.25, zoomControl: false, attributionControl: false, minZoom: 4, maxZoom: 17 });
+  L.control.zoom({ position: "topright" }).addTo(map);
+  const renderer = L.canvas({ padding: 0.3 });
+  map.createPane("fondPane").style.zIndex = 300;
+  map.createPane("routesPane").style.zIndex = 350;
+  map.createPane("villesPane").style.zIndex = 450;
+  map.getPane("villesPane").style.pointerEvents = "none";
+  const fondRenderer = L.canvas({ pane: "fondPane", padding: 0.3 }), routeRenderer = L.canvas({ pane: "routesPane", padding: 0.3 });
+  const land = L.geoJSON(window.DEPS, { pane: "fondPane", renderer: fondRenderer, interactive: false, style: () => ({ color: css("--land-line"), weight: 0.7, fillColor: css("--land"), fillOpacity: 1 }) }).addTo(map);
+  const VIEWS = { "Métropole": [[41.3, -5.2], [51.1, 9.6]], "Corse": [[41.3, 8.5], [43.05, 9.6]], "Guadeloupe": [[15.8, -61.85], [16.55, -61.0]], "Martinique": [[14.38, -61.25], [14.9, -60.8]],
+    "Guyane": [[2.1, -54.6], [5.8, -51.6]], "La Réunion": [[-21.4, 55.2], [-20.85, 55.85]], "Mayotte": [[-13.02, 44.95], [-12.62, 45.32]] };
+  map.fitBounds(VIEWS["Métropole"]);
+
+  // ---- base-map styles (no tiles: every layer ships with the page) ----
+  const F = window.FOND;
+  const flip = lines => lines.map(l => l.map(([x, y]) => [y, x]));
+  const roadsA = L.polyline(flip(F.roads.A), { pane: "routesPane", renderer: routeRenderer, interactive: false, color: css("--road-a"), weight: 2.2, opacity: 0.85 });
+  const roadsN = L.polyline(flip(F.roads.N), { pane: "routesPane", renderer: routeRenderer, interactive: false, color: css("--road-n"), weight: 1.3, opacity: 0.8 });
+  const REG_FILLS = ["#cfe0d4", "#e5d7c3", "#d4dbe8", "#e8d3d6", "#dfe3c8", "#d8d0e6", "#cbe2e2", "#eadcc9", "#d6e4cf", "#e3d2e1", "#cfd9e6", "#e9e1c4", "#d2e3dc"];
+  const regions = L.geoJSON(F.regions, { pane: "fondPane", renderer: fondRenderer, interactive: false,
+    style: f => ({ color: css("--region-line"), weight: 1.4, fillColor: REG_FILLS[(parseInt(f.properties.c, 10) || 0) % REG_FILLS.length], fillOpacity: document.documentElement.matches("[data-theme=dark]") || (window.matchMedia("(prefers-color-scheme: dark)").matches && !document.documentElement.matches("[data-theme=light]")) ? 0.18 : 0.75 }) });
+  const villes = L.layerGroup();
+  const villeMarkers = F.villes.map(([n, lat, lon, pop]) => ({ pop, m: L.marker([lat, lon], { pane: "villesPane", interactive: false, keyboard: false,
+    icon: L.divIcon({ className: "city-label" + (pop >= 200000 ? " big" : ""), html: n, iconSize: null }) }) }));
+  function updateVilles() {
+    const z = map.getZoom(), min = z < 6 ? 250000 : z < 7 ? 100000 : z < 8 ? 50000 : z < 9 ? 30000 : 20000;
+    villes.clearLayers();
+    villeMarkers.forEach(v => { if (v.pop >= min) villes.addLayer(v.m); });
+  }
+  map.on("zoomend", updateVilles);
+  updateVilles();
+  const heat = L.heatLayer ? L.heatLayer([], { radius: 18, blur: 22, maxZoom: 10, minOpacity: 0.25 }) : null;
+  // probably vacant warehouses: hollow dashed rings, own card. They share the sites' canvas: a second canvas
+  // stacked on top would swallow every click meant for the warehouses below it.
+  const V = window.VACANTS || [];
+  const vacLayer = L.layerGroup();
+  const vacMarkers = V.map(v => {
+    const m = L.circleMarker([v[0], v[1]], { renderer, radius: 5.5, weight: 2, dashArray: "3 2", color: css("--c-vacant"), fillColor: css("--c-vacant"), fillOpacity: 0.12 });
+    m.on("click", () => m.bindPopup(vacPopup(v), { maxWidth: 360 }).openPopup());
+    return m;
+  });
+  function vacPopup(v) {
+    const row = (k, x) => x ? `<dt>${k}</dt><dd>${x}</dd>` : "";
+    return `<div class="pop"><h3>${esc(v[3])}</h3>
+      <div class="tags"><span class="tag">Probablement vacant</span><span class="tag">Confiance ${v[20] === "MEDIUM" ? "moyenne" : "faible"}</span></div>
+      <dl>
+        ${row("Adresse", esc([v[4], [v[5], v[6]].filter(Boolean).join(" ")].filter(Boolean).join(", ")))}
+        ${row("GPS", `<span class="mono">${v[0].toFixed(5)}, ${v[1].toFixed(5)}</span> <span class="note">(${esc(GEO[v[22]] || v[22])})</span>`)}
+        ${row("Dernier exploitant", esc(v[9]) + (v[10] ? ` <span class="mono">SIREN ${esc(v[10])}</span>` : ""))}
+        ${row("Fermé le", esc(v[11]))}
+        ${row("Propriétaire", esc(v[12]) + (v[13] ? ` <span class="mono">SIREN ${esc(v[13])}</span>` : ""))}
+        ${row("Titulaire ICPE", v[14] && v[14] !== v[12] ? esc(v[14]) : "")}
+        ${row("Statut ICPE", esc(v[15]))}
+        ${row("Volume ICPE", v[16] ? `<span class="mono">${Number(v[16]).toLocaleString("fr-FR")} m³</span>` : "")}
+        ${row("Emprise bâtie", v[17] ? `<span class="mono">${Number(v[17]).toLocaleString("fr-FR")} m²</span> <span class="note">(RNB ${esc(v[18])})</span>` : "")}
+        ${row("Indices", esc(v[19]))}
+        ${row("Identifiant", `<span class="mono">${esc(v[2])}</span>`)}
+      </dl>
+      <p class="note">Disponibilité non confirmée : aucun exploitant actif n'est connu sur ce bâtiment.</p>
+      ${clientsHtml(v[2])}
+      <div class="actions">${v[21] ? `<a href="${esc(v[21])}" target="_blank" rel="noopener">Source</a>` : ""}
+        ${v[18] ? `<a href="https://rnb.beta.gouv.fr/carte?q=${esc(v[18])}" target="_blank" rel="noopener">Bâtiment (RNB)</a>` : ""}</div></div>`;
+  }
+  function refreshVacants() {
+    vacLayer.clearLayers();
+    const reg = st.region === "" ? null : D.region[+st.region], dep = st.dept === "" ? null : D.dept[+st.dept];
+    let n = 0;
+    const on = st.types.has("VACANT");
+    V.forEach((v, i) => { if ((reg === null || v[7] === reg) && (dep === null || v[8] === dep)) { if (on) vacLayer.addLayer(vacMarkers[i]); n++; } });
+    const el = document.getElementById("vacCount"); if (el) el.textContent = n.toLocaleString("fr-FR");
+    const chip = document.querySelector('[data-n="VACANT"]'); if (chip) chip.textContent = n.toLocaleString("fr-FR");
+  }
+  const LAYERS = { vacants: vacLayer, regions: regions, autoroutes: roadsA, nationales: roadsN, villes: villes, densite: heat, get points() { return layer; } };
+  const STYLES = {
+    plan: { label: "Plan routier", on: ["autoroutes", "nationales", "villes", "points", "vacants"] },
+    epure: { label: "Épuré", on: ["points", "vacants"] },
+    regions: { label: "Régions", on: ["regions", "villes", "points", "vacants"] },
+    densite: { label: "Densité", on: ["densite", "autoroutes", "villes"] },
+  };
+  const thumb = k => {
+    const a = "var(--road-a)", n = "var(--road-n)", land = "var(--land)", ln = "var(--land-line)";
+    const base = `<rect width="100" height="44" fill="var(--bg)"/><path d="M8 38 L22 8 L56 4 L88 14 L94 34 L60 41 Z" fill="${land}" stroke="${ln}"/>`;
+    const extra = { plan: `<path d="M14 30 L40 20 L70 22 L90 12" stroke="${a}" stroke-width="2.4" fill="none"/><path d="M30 8 L44 24 L52 40" stroke="${n}" stroke-width="1.4" fill="none"/><circle cx="44" cy="22" r="2.2" fill="var(--city)"/>`,
+      epure: `<circle cx="34" cy="24" r="2" fill="var(--c-3pl)"/><rect x="58" y="18" width="3.4" height="3.4" fill="var(--c-inhouse)"/>`,
+      regions: `<path d="M8 38 L22 8 L44 6 L40 40 Z" fill="#cfe0d4" stroke="var(--region-line)"/><path d="M44 6 L56 4 L88 14 L70 30 L40 40 Z" fill="#e5d7c3" stroke="var(--region-line)"/><path d="M70 30 L94 34 L60 41 L40 40 Z" fill="#d4dbe8" stroke="var(--region-line)"/>`,
+      densite: `<circle cx="40" cy="22" r="11" fill="#f0a040" opacity=".45"/><circle cx="40" cy="22" r="5" fill="#c8553d" opacity=".8"/><circle cx="72" cy="26" r="7" fill="#f0a040" opacity=".4"/>` };
+    return `<svg viewBox="0 0 100 44" aria-hidden="true">${base}${extra[k]}</svg>`;
+  };
+  const StylesCtl = L.Control.extend({ options: { position: "topright" }, onAdd() {
+    const box = L.DomUtil.create("div", "leaflet-control");
+    box.innerHTML = `<button type="button" class="styles-btn" id="stylesBtn" aria-expanded="false" aria-controls="stylesPanel">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1 15 5 8 9 1 5Z M1 8l7 4 7-4 M1 11l7 4 7-4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>Styles de carte</button>
+      <div class="styles-panel" id="stylesPanel" hidden>
+        <span class="label">Style</span>
+        <div class="style-grid">${Object.entries(STYLES).map(([k, v]) => `<button type="button" class="style-card" data-style="${k}" aria-pressed="false">${thumb(k)}${v.label}</button>`).join("")}</div>
+        <span class="label">Couches</span>
+        <div class="layer-list">
+          <label><input type="checkbox" data-layer="points"> Entrepôts exploités (points)</label>
+          <label><input type="checkbox" data-layer="vacants"> <span class="dot" style="background:transparent;border:2px dashed var(--c-vacant)"></span>Entrepôts probablement vacants (<span id="vacCount">0</span>)</label>
+          <label><input type="checkbox" data-layer="autoroutes"> <span class="swatch" style="border-color:var(--road-a)"></span>Autoroutes</label>
+          <label><input type="checkbox" data-layer="nationales"> <span class="swatch" style="border-color:var(--road-n);border-top-width:2px"></span>Nationales et voies express</label>
+          <label><input type="checkbox" data-layer="villes"> Villes de plus de 20 000 hab.</label>
+          <label><input type="checkbox" data-layer="regions"> Régions</label>
+          <label><input type="checkbox" data-layer="densite"${heat ? "" : " disabled"}> Densité des entrepôts</label>
+        </div>
+        <span class="note">Routes © contributeurs OpenStreetMap (ODbL). Limites : IGN / INSEE. Villes : INSEE, populations légales.</span>
+      </div>`;
+    L.DomEvent.disableClickPropagation(box);
+    L.DomEvent.disableScrollPropagation(box);
+    return box;
+  } });
+  map.addControl(new StylesCtl());
+  const panel = document.getElementById("stylesPanel"), btn = document.getElementById("stylesBtn");
+  btn.addEventListener("click", () => { panel.hidden = !panel.hidden; btn.setAttribute("aria-expanded", String(!panel.hidden)); });
+  function setLayer(k, on) {
+    const l = LAYERS[k]; if (!l) return;
+    if (on && !map.hasLayer(l)) l.addTo(map);
+    if (!on && map.hasLayer(l)) map.removeLayer(l);
+    const cb = panel.querySelector(`[data-layer="${k}"]`); if (cb) cb.checked = on;
+    if (k === "densite" && on) refreshHeat();
+  }
+  function applyStyle(k) {
+    Object.keys(LAYERS).forEach(l => setLayer(l, STYLES[k].on.includes(l)));
+    panel.querySelectorAll(".style-card").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.style === k)));
+    try { localStorage.setItem("atlas-style", k); } catch (e) { /* storage unavailable */ }
+  }
+  panel.addEventListener("click", e => { const c = e.target.closest(".style-card"); if (c) applyStyle(c.dataset.style); });
+  panel.addEventListener("change", e => { const l = e.target.dataset.layer; if (l) setLayer(l, e.target.checked); });
+  let shownNow = [];
+  function refreshHeat() { if (heat && map.hasLayer(heat)) heat.setLatLngs(shownNow.map(i => [S[i][0], S[i][1], 1])); }
+
+  // markers: circles for 3PL/mixed/unknown, squares (custom canvas path) for in-house
+  const Square = L.CircleMarker.extend({ _updatePath() {
+    const r = this._renderer, p = this._point, s = this._radius, ctx = r._ctx;
+    if (!r._drawing || this._empty()) return;
+    ctx.beginPath(); ctx.rect(p.x - s, p.y - s, s * 2, s * 2); r._fillStroke(ctx, this);
+  } });
+  const layer = L.layerGroup().addTo(map);
+  const colorOf = t => css(TYPES.find(x => x[0] === D.type[t])[2]);
+  const markers = S.map((s, i) => {
+    const opts = Object.assign({ renderer, radius: 3.6, fillColor: colorOf(s[2]), fillOpacity: 0.88 }, ringStyle(i));
+    const m = D.type[s[2]] === "IN_HOUSE" ? new Square([s[0], s[1]], Object.assign(opts, { radius: 3.1 })) : L.circleMarker([s[0], s[1]], opts);
+    m.on("click", () => m.bindPopup(popup(i), { maxWidth: 360 }).openPopup());
+    return m;
+  });
+
+  function popup(i) {
+    const s = S[i], t = D.type[s[2]], g = gname(s[7]), n = byGroup.get(s[7]).length;
+    const tag = x => `<span class="tag">${esc(x)}</span>`;
+    const row = (k, v) => v ? `<dt>${k}</dt><dd>${v}</dd>` : "";
+    return `<div class="pop"><h3>${esc(s[13])}</h3>
+      <div class="tags">${tag(TYPES.find(x => x[0] === t)[1])}${tag(D.sub[s[3]])}${tag("Confiance " + CONFS.find(c => c[0] === D.conf[s[8]])[1].toLowerCase())}</div>
+      <dl>
+        ${row("Adresse", esc([s[14], [s[15], s[16]].filter(Boolean).join(" ")].filter(Boolean).join(", ")))}
+        ${row("GPS", `<span class="mono">${s[0].toFixed(5)}, ${s[1].toFixed(5)}</span> <span class="note">(${esc(GEO[D.geo[s[10]]] || D.geo[s[10]])})</span>`)}
+        ${row("Exploitant", esc(s[17]) + (s[18] ? ` <span class="mono">SIREN ${esc(s[18])}</span>` : ""))}
+        ${row("SIRET", s[19] ? `<span class="mono">${esc(s[19])}</span>` : "")}
+        ${row("Groupe", esc(g) + (s[26] ? ` <span class="mono">${esc(s[26])}</span>` : "") + ` <span class="note">· ${n} site${n > 1 ? "s" : ""}</span>`)}
+        ${row("Propriétaire", esc(s[20]))}
+        ${row("Autres occupants", esc(s[21]))}
+        ${companyRows(i)}
+        ${row("Secteur", esc(D.sector[s[4]]))}
+        ${row("Lien usine", D.fr[s[11]] ? esc(FR[D.fr[s[11]]] || D.fr[s[11]]) + (s[22] ? `<br><span class="note">${esc(s[22])}</span>` : "") : "")}
+        ${row("Emprise bâtie", s[27] ? `<span class="mono">${Number(s[27]).toLocaleString("fr-FR")} m²</span> <span class="note">(bâtiment RNB${s[28] ? " " + esc(s[28]) : ""})</span>` : (s[29] === "NO_BUILDING_FOUND" ? `<span class="note">aucun bâtiment RNB trouvé au point</span>` : ""))}
+        ${row("Volume ICPE", s[23] ? `<span class="mono">${Number(s[23]).toLocaleString("fr-FR")} m³</span> (rubrique 1510)` : "")}
+        ${row("Activité", esc(s[24]))}
+        ${row("Statut", esc(VER[D.ver[s[9]]] || D.ver[s[9]]))}
+        ${row("Contrôle", s[31] ?`<span class="note">${esc(s[31])}</span>` : "")}
+        ${row("Bâtiment", s[32] ? `<span class="note">${esc(s[32])}</span>` : "")}
+        ${signalRow(s[12])}
+        ${row("Identifiant", `<span class="mono">${esc(s[12])}</span>`)}
+      </dl>
+      ${clientsHtml(s[12])}
+      <div class="actions">${n > 1 ? `<button class="linkbtn" type="button" data-group="${s[7]}">Voir les ${n} sites du groupe</button>` : ""}
+        ${s[25] ? `<a href="${esc(s[25])}" target="_blank" rel="noopener">Source</a>` : ""}
+        ${s[28] ? `<a href="https://rnb.beta.gouv.fr/carte?q=${esc(s[28])}" target="_blank" rel="noopener">Bâtiment (RNB)</a>` : ""}</div></div>`;
+  }
+  map.on("popupopen", e => {
+    const b = e.popup.getElement().querySelector("[data-group]");
+    if (b) b.addEventListener("click", () => { isolate(+b.dataset.group); map.closePopup(); });
+  });
+
+  // controls
+  function chips(el, list, set, idx) {
+    el.innerHTML = list.map(([v, lab, col]) => `<button type="button" class="chip" aria-pressed="true" data-v="${v}">${col ? (v === "VACANT" ? `<span class="dot" style="background:transparent;border:2px dashed var(${col});width:8px;height:8px"></span>` : `<span class="dot ${v === "IN_HOUSE" ? "sq" : ""}" style="background:var(${col})"></span>`) : ""}${lab} <span class="n" data-n="${v}"></span></button>`).join("");
+    el.addEventListener("click", e => {
+      const b = e.target.closest(".chip"); if (!b) return;
+      const v = b.dataset.v; set.has(v) ? set.delete(v) : set.add(v); b.setAttribute("aria-pressed", set.has(v)); render();
+    });
+  }
+  chips(document.getElementById("types"), TYPES, st.types);
+  chips(document.getElementById("confs"), CONFS, st.confs);
+  const opts = (sel, arr, all) => { sel.innerHTML = `<option value="">${all}</option>` + arr.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join(""); };
+  const sortFr = a => a.slice().sort((x, y) => x[1].localeCompare(y[1], "fr"));
+  opts(document.getElementById("region"), sortFr(D.region.map((r, i) => [i, r || "(non renseignée)"])), "Toutes");
+  const deptSel = document.getElementById("dept");
+  function fillDepts() {
+    const r = st.region === "" ? null : +st.region, seen = new Set();
+    S.forEach(s => { if (r === null || s[5] === r) seen.add(s[6]); });
+    opts(deptSel, [...seen].map(i => [i, D.dept[i] || "(non renseigné)"]).sort((a, b) => a[1].localeCompare(b[1], "fr", { numeric: true })), "Tous");
+  }
+  fillDepts();
+  opts(document.getElementById("sector"), sortFr(D.sector.map((r, i) => [i, r || "(non renseigné)"])), "Tous");
+  opts(document.getElementById("sub"), sortFr(D.sub.map((r, i) => [i, r])), "Tous");
+  const nr = [["nr", "(non renseigné)"]];
+  opts(document.getElementById("ca"), CA_CL.map(c => [c[0], c[1]]).concat(nr), "Tous");
+  opts(document.getElementById("cat"), CATS.concat(nr), "Toutes");
+  opts(document.getElementById("eff"), EFF_CL.map(c => [c[0], c[1] + " salariés"]).concat(nr), "Tous");
+  const nafN = {}; ENAF.forEach(d => { nafN[d] = (nafN[d] || 0) + 1; });
+  opts(document.getElementById("naf"), Object.keys(nafN).filter(d => d !== "nr").sort().map(d => [d, `${d} · ${ENT.naf.div[d] || ""} (${nafN[d].toLocaleString("fr-FR")})`]).concat(nr), "Toutes");
+  opts(document.getElementById("surf"), SURF_CL.map(c => [c[0], c[1]]).concat(nr), "Toutes");
+  opts(document.getElementById("vol"), VOL_CL.map(c => [c[0], c[1]]).concat(nr), "Tous");
+  ["ca", "cat", "eff", "naf", "surf", "vol"].forEach(k => document.getElementById(k).addEventListener("change", e => { st[k] = e.target.value; render(); }));
+  // group suggestions: groups with 2+ sites, by size
+  const big = [...byGroup.entries()].filter(([, v]) => v.length > 1).sort((a, b) => b[1].length - a[1].length);
+  document.getElementById("glist").innerHTML = big.map(([k, v]) => `<option value="${esc(gname(k))}">${v.length} sites</option>`).join("");
+  document.getElementById("region").addEventListener("change", e => { st.region = e.target.value; st.dept = ""; fillDepts(); render(true); });
+  deptSel.addEventListener("change", e => { st.dept = e.target.value; render(true); });
+  document.getElementById("sector").addEventListener("change", e => { st.sector = e.target.value; render(); });
+  document.getElementById("sub").addEventListener("change", e => { st.sub = e.target.value; render(); });
+  const gs = document.getElementById("gsearch");
+  gs.addEventListener("input", () => {
+    const v = gs.value.trim().toLowerCase();
+    const exact = big.find(([k]) => gname(k).toLowerCase() === v);
+    if (exact) { isolate(exact[0]); return; }
+    st.gtext = v; st.group = null; document.getElementById("groupbar").hidden = true; render();
+  });
+  document.getElementById("clientCount").textContent = RING.filter(Boolean).length.toLocaleString("fr-FR");
+  document.getElementById("clientOnly").addEventListener("change", e => { st.clientOnly = e.target.checked; render(); });
+  document.getElementById("gclear").addEventListener("click", () => { st.group = null; st.gtext = ""; gs.value = ""; document.getElementById("groupbar").hidden = true; render(); });
+  function isolate(k) {
+    st.group = k; st.gtext = "";
+    const ids = byGroup.get(k), types = {};
+    ids.forEach(i => { const t = D.type[S[i][2]]; types[t] = (types[t] || 0) + 1; });
+    document.getElementById("gname").textContent = gname(k);
+    document.getElementById("ginfo").textContent = `${ids.length} sites · ` + Object.entries(types).map(([t, n]) => `${n} ${TYPES.find(x => x[0] === t)[1].toLowerCase()}`).join(", ");
+    document.getElementById("groupbar").hidden = false;
+    gs.value = gname(k);
+    render();
+    const pts = ids.map(i => [S[i][0], S[i][1]]);
+    map.fitBounds(L.latLngBounds(pts).pad(0.2), { maxZoom: 12 });
+  }
+  document.getElementById("jump").innerHTML = Object.keys(VIEWS).map(k => `<button type="button" data-k="${k}">${k}</button>`).join("");
+  document.getElementById("jump").addEventListener("click", e => { const k = e.target.dataset.k; if (k) map.fitBounds(VIEWS[k]); });
+
+  function pass(s, ignore, i) {
+    if (ignore !== "type" && !st.types.has(D.type[s[2]])) return false;
+    if (ignore !== "conf" && !st.confs.has(D.conf[s[8]])) return false;
+    if (st.region !== "" && s[5] !== +st.region) return false;
+    if (st.dept !== "" && s[6] !== +st.dept) return false;
+    if (st.sector !== "" && s[4] !== +st.sector) return false;
+    if (st.sub !== "" && s[3] !== +st.sub) return false;
+    if (st.group !== null && s[7] !== st.group && !inGroup.get(st.group).has(i)) return false;
+    if (st.gtext && !D.group[s[7]].toLowerCase().includes(st.gtext) && !(s[17] || "").toLowerCase().includes(st.gtext) && !CLTXT[i].includes(st.gtext)) return false;
+    if (st.clientOnly && !RING[i]) return false;
+    if (st.ca && ECA[i] !== st.ca) return false;
+    if (st.cat && ECAT[i] !== st.cat) return false;
+    if (st.eff && EEFF[i] !== st.eff) return false;
+    if (st.naf && ENAF[i] !== st.naf) return false;
+    if (st.surf && ESURF[i] !== st.surf) return false;
+    if (st.vol && EVOL[i] !== st.vol) return false;
+    return true;
+  }
+  function render(fit) {
+    layer.clearLayers();
+    const shown = [], tc = {}, cc = {}, rc = {}, ringed = [];
+    S.forEach((s, i) => {
+      if (pass(s, "type", i)) tc[D.type[s[2]]] = (tc[D.type[s[2]]] || 0) + 1;
+      if (pass(s, "conf", i)) cc[D.conf[s[8]]] = (cc[D.conf[s[8]]] || 0) + 1;
+      if (pass(s, undefined, i)) { shown.push(i); if (RING[i]) ringed.push(i); else layer.addLayer(markers[i]); const r = D.region[s[5]] || "(non renseignée)"; rc[r] = (rc[r] || 0) + 1; }
+    });
+    ringed.forEach(i => layer.addLayer(markers[i]));   // sites with a known client are drawn last, on top
+    document.querySelectorAll("[data-n]").forEach(el => { const v = el.dataset.n; el.textContent = (tc[v] ?? cc[v] ?? 0).toLocaleString("fr-FR"); });
+    document.getElementById("count").innerHTML = `${shown.length.toLocaleString("fr-FR")}<small> site${shown.length > 1 ? "s" : ""} affiché${shown.length > 1 ? "s" : ""}</small>`;
+    const top = Object.entries(rc).sort((a, b) => b[1] - a[1]).slice(0, 6), max = top.length ? top[0][1] : 1;
+    document.getElementById("bars").innerHTML = top.map(([r, n]) => `<div class="bar"><span>${esc(r)}</span><i style="width:${Math.max(4, n / max * 100)}%"></i><span>${n.toLocaleString("fr-FR")}</span></div>`).join("");
+    shownNow = shown; refreshHeat(); refreshVacants();
+    if (fit && shown.length) map.fitBounds(L.latLngBounds(shown.map(i => [S[i][0], S[i][1]])).pad(0.1), { maxZoom: 11 });
+  }
+  let startStyle = "plan";
+  try { startStyle = localStorage.getItem("atlas-style") || "plan"; } catch (e) { /* storage unavailable */ }
+  map.on("zoomend", () => { const z = map.getZoom(), r = z < 7 ? 3.2 : z < 9 ? 4.2 : z < 11 ? 5.5 : 7; markers.forEach(m => m.setRadius(m instanceof Square ? r * 0.86 : r)); });
+  // theme changes: recolor land and markers
+  const mq = window.matchMedia("(prefers-color-scheme: dark)");
+  const recolor = () => { land.setStyle({ color: css("--land-line"), fillColor: css("--land") });
+    vacMarkers.forEach(m => m.setStyle({ color: css("--c-vacant"), fillColor: css("--c-vacant") }));
+    roadsA.setStyle({ color: css("--road-a") }); roadsN.setStyle({ color: css("--road-n") }); regions.resetStyle(); markers.forEach((m, i) => m.setStyle(Object.assign({ fillColor: colorOf(S[i][2]) }, ringStyle(i)))); };
+  mq.addEventListener?.("change", recolor);
+  new MutationObserver(recolor).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  render();
+  applyStyle(STYLES[startStyle] ? startStyle : "plan");
+})();
+</script>
