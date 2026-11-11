@@ -135,6 +135,8 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
 .note { font-size: 11.5px; color: var(--muted); line-height: 1.45; margin: 0; }
 /* Leaflet details */
 .leaflet-container { font-family: var(--f-ui); background: var(--bg); }
+.ign-gris { filter: grayscale(1) contrast(1.05) brightness(1.04); }
+.ign-attenue { filter: saturate(.4) contrast(.92) brightness(1.06); }
 .leaflet-bar a { color: var(--ink); background: var(--panel); border-color: var(--line); }
 .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--panel); color: var(--ink); }
 .leaflet-popup-content { margin: 12px 14px; width: 310px !important; max-width: 70vw; line-height: 1.4; }
@@ -443,12 +445,18 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
   const updVilles = () => { const z = map.getZoom(), min = z < 6 ? 250000 : z < 7 ? 100000 : z < 8 ? 50000 : z < 9 ? 30000 : 20000;
     villes.clearLayers(); vm.forEach(v => { if (v.pop >= min) villes.addLayer(v.m); }); };
   map.on("zoomend", updVilles);
-  const ign = (layer, fmt, opt = {}) => L.tileLayer("https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=" + layer +
-    "&STYLE=normal&TILEMATRIXSET=PM&FORMAT=" + fmt + "&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}", Object.assign({ maxZoom: 19, attribution: "© IGN – Géoplateforme" }, opt));
+  // IGN Géoplateforme WMTS, open without an API key. The raster Plan IGN has one style ("normal"): the grey and
+  // toned-down versions recolour its tiles in the browser (CSS filter on the layer, see .ign-gris / .ign-attenue)
+  const ign = (layer, fmt, opt = {}, style = "normal") => L.tileLayer("https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=" + layer +
+    "&STYLE=" + style + "&TILEMATRIXSET=PM&FORMAT=" + fmt + "&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}", Object.assign({ maxZoom: 19, attribution: "© IGN – Géoplateforme" }, opt));
   const BASES = {
     "Plan IGN": ign("GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2", "image/png"),
+    "Plan IGN gris": ign("GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2", "image/png", { className: "ign-gris" }),
+    "Plan IGN atténué": ign("GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2", "image/png", { className: "ign-attenue" }),
+    // Plan IGN HD exists from zoom 6 to 18: the ordinary Plan IGN fills the national view below
+    "Plan IGN HD": L.layerGroup([ign("GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2", "image/png", { maxZoom: 5.99 }),
+                                 ign("IGNF_PLAN-IGN-HD", "image/jpeg", { minZoom: 6, maxZoom: 18 }, "PLAN-IGN-HD")]),
     "Photographies aériennes": ign("ORTHOIMAGERY.ORTHOPHOTOS", "image/jpeg"),
-    "OpenStreetMap": L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", { maxZoom: 19, subdomains: "abcd", attribution: "© OpenStreetMap, © CARTO" }),
     "Fond simplifié (hors ligne)": fondSimple,
   };
   const heat = L.heatLayer ? L.heatLayer([], { radius: 18, blur: 22, maxZoom: 10, minOpacity: 0.25 }) : null;
@@ -803,7 +811,7 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
       <div class="bars">${top.map(([r, n]) => `<div class="bar"><span>${esc(r)}</span><i style="width:${Math.max(4, n / max * 100)}%"></i><span>${nf(n)}</span></div>`).join("")}</div>
       <p class="note">Choisissez une ligne du tableau pour isoler un groupe sur la carte, ou cliquez sur un point pour sa fiche.
         ${nvac ? `${nf(nvac)} entrepôts probablement vacants sont aussi affichés (cercles violets en pointillé).` : ""}</p>
-      <p class="note">Rond plein : 3PL. Carré : entrepôt en propre (industriel ou distributeur). Cercle violet en pointillé : entrepôt probablement vacant (exploitant parti, bâtiment toujours présent). Anneau vert : client du 3PL connu sur le site (plein : confirmé ou probable ; pointillé : hypothèse) ; anneau gris : relation terminée. Les sites « à vérifier » proviennent de SIRENE seul. Chiffre d'affaires, catégorie, effectif et activité sont ceux de la société exploitante. Emprise bâtie : bâtiment RNB rattaché au point. Volume ICPE : rubrique 1510. Construction, hauteur, matériaux et propriétaire du bâtiment : BDNB (CSTB, millésime ${esc((window.BDNB || {}).m || "")}), rapprochée par les parcelles du bâtiment RNB. Fonds : Plan IGN et photographies aériennes (Géoplateforme), OpenStreetMap (CARTO) ; fond simplifié : routes © OpenStreetMap, limites IGN / INSEE.</p>`;
+      <p class="note">Rond plein : 3PL. Carré : entrepôt en propre (industriel ou distributeur). Cercle violet en pointillé : entrepôt probablement vacant (exploitant parti, bâtiment toujours présent). Anneau vert : client du 3PL connu sur le site (plein : confirmé ou probable ; pointillé : hypothèse) ; anneau gris : relation terminée. Les sites « à vérifier » proviennent de SIRENE seul. Chiffre d'affaires, catégorie, effectif et activité sont ceux de la société exploitante. Emprise bâtie : bâtiment RNB rattaché au point. Volume ICPE : rubrique 1510. Construction, hauteur, matériaux et propriétaire du bâtiment : BDNB (CSTB, millésime ${esc((window.BDNB || {}).m || "")}), rapprochée par les parcelles du bâtiment RNB. Fonds : Plan IGN (couleur, gris, atténué, HD) et photographies aériennes (Géoplateforme, sans clé) ; fond simplifié : routes © OpenStreetMap, limites IGN / INSEE.</p>`;
   }
   function groupPanel() {
     const ids = selIds(), all = byGroup.get(sel).filter(i => selSiret === null || siretOf(i) === selSiret);
