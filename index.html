@@ -242,7 +242,9 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
   const VER = { CONFIRMED: "confirmé", STORAGE_FUNCTION_CONFIRMED: "fonction de stockage confirmée", CONFIRMED_OPERATOR_TO_VERIFY: "exploitant à vérifier", TO_VERIFY: "à vérifier",
     TO_VERIFY_BUILDING_FOUND: "à vérifier, grand bâtiment présent", TO_VERIFY_SMALL_BUILDING: "à vérifier, bâtiment trop petit pour un entrepôt",
     OPERATOR_CHANGED_TO_VERIFY: "nouvel exploitant probable, à vérifier", OPERATOR_CLOSED_TO_VERIFY: "SIRET de l'exploitant fermé, aucun remplaçant trouvé" };
-  const gname = i => D.group[i].split("|")[0];
+  // two pseudo-groups: the sites whose operator is unknown, and the probably vacant warehouses (vacants.js)
+  const UNK = "UNK", VAC = "VAC", PSEUDO = { UNK: "Exploitants inconnus", VAC: "Entrepôts probablement vacants" };
+  const gname = i => PSEUDO[i] || D.group[i].split("|")[0];
   const row = (k, x) => x ? `<dt>${k}</dt><dd>${x}</dd>` : "";
 
   // =====================================================================================
@@ -318,12 +320,13 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
   // group index: a site belongs to its operator's group and to the groups of its other occupants (a group present on
   // a site operated by another company); those sites are shown apart in the detail lines ("autre occupant")
   const gidKey = new Map(D.group.map((g, k) => [g.split("|")[1], k]).filter(([gid]) => gid));   // a site without group_id must not catch every site
-  const groupsOf = i => { const ks = [S[i][7]]; (S[i][30] || "").split(",").filter(Boolean).forEach(gid => { const k = gidKey.get(gid); if (k !== undefined && !ks.includes(k)) ks.push(k); }); return ks; };
+  const opKey = i => D.type[S[i][2]] === "UNKNOWN" ? UNK : S[i][7];   // group of the site's operator
+  const groupsOf = i => { const ks = [opKey(i)]; (S[i][30] || "").split(",").filter(Boolean).forEach(gid => { const k = gidKey.get(gid); if (k !== undefined && !ks.includes(k)) ks.push(k); }); return ks; };
   const byGroup = new Map();
   S.forEach((s, i) => groupsOf(i).forEach(k => { if (!byGroup.has(k)) byGroup.set(k, []); byGroup.get(k).push(i); }));
   const siretOf = i => S[i][19] || S[i][12];   // establishment of the operator (the site id when no SIRET)
   // detail line of site i inside group k: the operator's SIRET, or one line per site where the group is only an occupant
-  const detailKey = (i, k) => S[i][7] === k ? siretOf(i) : "OCC-" + S[i][12];
+  const detailKey = (i, k) => opKey(i) === k ? siretOf(i) : "OCC-" + S[i][12];
   // ---- tolerant text search: by word, without accents or punctuation, and ignoring spaces ("le roy merlin" = "LEROY-MERLIN") ----
   const norm = t => String(t ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   const compact = n => n.replace(/ /g, "");
@@ -373,7 +376,7 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
   // CARDS (same content as before)
   // =====================================================================================
   function popup(i) {
-    const s = S[i], t = D.type[s[2]], g = gname(s[7]), n = byGroup.get(s[7]).length;
+    const s = S[i], t = D.type[s[2]], gk = opKey(i), g = gname(gk), n = byGroup.get(gk).length;
     const tag = x => `<span class="tag">${esc(x)}</span>`;
     return `<div class="pop"><h3>${esc(s[13])}</h3>
       <div class="tags">${tag(TLAB[t])}${tag(D.sub[s[3]])}${tag("Confiance " + CONFS.find(c => c[0] === D.conf[s[8]])[1].toLowerCase())}</div>
@@ -399,7 +402,7 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
         ${row("Identifiant", `<span class="mono">${esc(s[12])}</span>`)}
       </dl>
       ${clientsHtml(s[12])}
-      <div class="actions">${n > 1 && sel !== s[7] ? `<button class="linkbtn" type="button" data-group="${s[7]}">Voir les ${n} sites du groupe</button>` : ""}
+      <div class="actions">${n > 1 && sel !== gk ? `<button class="linkbtn" type="button" data-group="${gk}">Voir les ${n} sites du groupe</button>` : ""}
         ${s[25] ? `<a href="${esc(s[25])}" target="_blank" rel="noopener">Source</a>` : ""}
         ${s[28] ? `<a href="https://rnb.beta.gouv.fr/carte?q=${esc(s[28])}" target="_blank" rel="noopener">Bâtiment (RNB)</a>` : ""}</div></div>`;
   }
@@ -505,7 +508,7 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
     .bindPopup(() => vacPopup(v), { maxWidth: 360 }));
   map.on("popupopen", e => {
     const b = e.popup.getElement().querySelector("[data-group]");
-    if (b) b.addEventListener("click", () => { selectGroup(+b.dataset.group, true); map.closePopup(); });
+    if (b) b.addEventListener("click", () => { const g = b.dataset.group; selectGroup(PSEUDO[g] ? g : +g, true); map.closePopup(); });
   });
   const sizeFor = z => z < 7 ? 3.2 : z < 9 ? 4.2 : z < 11 ? 5.5 : 7;
   map.on("zoomend", () => { const r = sizeFor(map.getZoom()); markers.forEach(m => m.setRadius(m instanceof Square ? r * 0.86 : r)); });
@@ -625,6 +628,7 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
   const terms = [], seenT = new Set();
   const addTerm = (label, kind, n, extra) => { const k = kind + "|" + norm(label); if (!label || seenT.has(k)) return; seenT.add(k); terms.push(Object.assign({ label, kind, n }, extra)); };
   [...byGroup].sort((a, b) => b[1].length - a[1].length).forEach(([k, ids]) => addTerm(gname(k), "Groupe", ids.length, { g: k }));
+  addTerm(gname(VAC), "Groupe", V.length, { g: VAC });
   const clientN = {}; Object.values(C.site).forEach(ks => ks.forEach(k => { const c = C.R[k][0]; clientN[c] = (clientN[c] || 0) + 1; }));
   Object.entries(clientN).forEach(([c, n]) => addTerm(c, "Client d'un 3PL", n));
   const opN = {}, comN = {}; S.forEach(s => { if (s[17]) opN[s[17]] = (opN[s[17]] || 0) + 1; if (s[16]) comN[s[16]] = (comN[s[16]] || 0) + 1; });
@@ -671,7 +675,7 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
     { id: "nom", lab: "Entrepôt", v: i => S[i][13] || "", h: i => `<span class="nom">${esc(S[i][13])}</span><span class="small">${esc(S[i][17])}</span>` },
     { id: "type", lab: "Type", v: i => TLAB[D.type[S[i][2]]], h: i => `<span class="pill"><span class="dot ${D.type[S[i][2]] === "IN_HOUSE" ? "sq" : ""}" style="background:var(${TYPES.find(t => t[0] === D.type[S[i][2]])[2]})"></span>${esc(TLAB[D.type[S[i][2]]])}</span><span class="small">${esc(D.sub[S[i][3]])}</span>` },
     { id: "com", lab: "Commune", v: i => S[i][16] || "", h: i => `${esc(S[i][16])}<span class="small">${esc(D.dept[S[i][6]])}</span>` },
-    { id: "grp", lab: "Groupe", v: i => gname(S[i][7]), h: i => esc(gname(S[i][7])) },
+    { id: "grp", lab: "Groupe", v: i => gname(opKey(i)), h: i => esc(gname(opKey(i))) },
     { id: "area", lab: "Emprise", n: 1, v: i => +S[i][27] || 0, h: i => m2(+S[i][27]) },
     { id: "vol", lab: "Volume ICPE", n: 1, v: i => +S[i][23] || 0, h: i => S[i][23] ? nf(S[i][23]) + " m³" : "–" },
     { id: "year", lab: "Construit", n: 1, v: i => yearOf(S[i][12]) ?? -1, h: i => yearOf(S[i][12]) ?? "–" },
@@ -703,7 +707,19 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
   function groupsOfShown() {
     const G = new Map();
     shown.forEach(i => groupsOf(i).forEach(k => { if (!G.has(k)) G.set(k, []); G.get(k).push(i); }));
-    return [...G].map(([k, ids]) => agg({ k, name: gname(k) }, ids));
+    const rows = [...G].map(([k, ids]) => agg({ k, name: gname(k) }, ids));
+    if (vacList.length) {   // the probably vacant warehouses, as one more group
+      const g = { k: VAC, name: gname(VAC), ids: vacList, tc: { VACANT: vacList.length }, area: 0, big: 0, cl: 0, year: null, ca: null };
+      const regs = {}; vacList.forEach(j => { const a = +V[j][17] || 0; g.area += a; g.big = Math.max(g.big, a); regs[V[j][7] || "(non renseignée)"] = (regs[V[j][7] || "(non renseignée)"] || 0) + 1; });
+      const rs = Object.entries(regs).sort((a, b) => b[1] - a[1]);
+      rows.push(Object.assign(g, { region: rs[0][0], nreg: rs.length }));
+    }
+    return rows;
+  }
+  function vacantLines() {
+    return vacList.map(j => { const v = V[j], a = +v[17] || 0;
+      return { k: VAC, vac: j, siret: v[2], name: v[9] || v[3], where: v[6], closed: v[11], ids: [j], tc: { VACANT: 1 }, area: a, big: a, cl: 0, year: null, ca: null }; })
+      .sort((a, b) => b.area - a.area);
   }
   // the SIRETs of a group within the shown sites (detail lines under the group line)
   function siretsOf(g) {
@@ -727,7 +743,9 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
     const key = r => view === "group" ? r.k : r;
     const acts = [];   // one action per clickable line, in order
     const cell = (c, r) => `<td class="${c.n ? "n" : ""}">${c.h(r)}</td>`;
-    const subName = (t, g) => t.occ
+    const subName = (t, g) => t.vac !== undefined
+      ? `<span class="nom">${esc(t.where)}</span><span class="small">dernier exploitant : ${esc(t.name)}${t.closed ? " · fermé le " + esc(t.closed) : ""}</span>`
+      : t.occ
       ? `<span class="nom">autre occupant</span><span class="small">${esc(t.where)} · exploité par ${esc(t.name)}</span>`
       : `<span class="nom mono">${/^\d{14}$/.test(t.siret) ? "SIRET " + esc(t.siret) : "sans SIRET"}</span><span class="small">${esc(t.where)}${norm(t.name) !== norm(g.name) ? " · " + esc(t.name) : ""}</span>`;
     let html = "";
@@ -737,11 +755,11 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
       acts.push(() => open && selSiret === null ? clearSel() : selectGroup(r.k));
       html += `<tr tabindex="0" class="grp${open ? " open" : ""}" aria-expanded="${open}" aria-selected="${open && selSiret === null}">${cols.map(c => cell(c, r)).join("")}</tr>`;
       if (!open) return;
-      const subs = siretsOf(r), own = subs.filter(t => !t.occ), occ = subs.filter(t => t.occ);   // the occupant lines are always listed
-      const line = t => { acts.push(() => selectSiret(t));
+      const subs = r.k === VAC ? vacantLines() : siretsOf(r), own = subs.filter(t => !t.occ), occ = subs.filter(t => t.occ);   // the occupant lines are always listed
+      const line = t => { acts.push(() => t.vac !== undefined ? centerAt(V[t.vac][0], V[t.vac][1]) : selectSiret(t));
         html += `<tr tabindex="0" class="sub" aria-selected="${selSiret === t.siret}">${cols.map(c => c.id === "nom" ? `<td>${subName(t, r)}</td>` : cell(c, t)).join("")}</tr>`; };
       own.slice(0, SUB_MAX).forEach(line);
-      if (own.length > SUB_MAX) html += `<tr class="more"><td colspan="${cols.length}">… et ${nf(own.length - SUB_MAX)} autres SIRET (filtrez par région ou département pour les voir)</td></tr>`;
+      if (own.length > SUB_MAX) html += `<tr class="more"><td colspan="${cols.length}">… et ${nf(own.length - SUB_MAX)} autres ${r.k === VAC ? "sites" : "SIRET"} (filtrez par région ou département pour les voir)</td></tr>`;
       occ.forEach(line);
     });
     tbody.innerHTML = html || `<tr><td colspan="${cols.length}" class="note">Aucun entrepôt ne correspond à ces filtres.</td></tr>`;
@@ -778,6 +796,7 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
   // =====================================================================================
   // RENDER — map points, counts, table, panel
   // =====================================================================================
+  let vacList = [];   // indices in V of the vacant warehouses that pass the geography and search filters
   function render(fit) {
     const tc = {}, cc = {};
     shown = [];
@@ -789,13 +808,14 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
     // vacant warehouses: geography and search filters only (no operator)
     const regOk = new Set(D.region.filter((r, k) => MS.region.ok(k))), depOk = new Set(D.dept.filter((d, k) => MS.dept.ok(k)));
     const reg = MS.region.all() ? null : regOk, dep = MS.dept.all() ? null : depOk;
-    const vacShown = st.types.has("VACANT") && !sel ? V.filter(v => (om || !OM_REG.has(v[7])) && (reg === null || reg.has(v[7])) && (dep === null || dep.has(v[8]))
-      && (!qm || qm(VSEARCHN[V.indexOf(v)], VSEARCHC[V.indexOf(v)]))) : [];
+    vacList = !st.types.has("VACANT") ? [] : V.map((v, j) => j).filter(j => { const v = V[j];
+      return (om || !OM_REG.has(v[7])) && (reg === null || reg.has(v[7])) && (dep === null || dep.has(v[8])) && (!qm || qm(VSEARCHN[j], VSEARCHC[j])); });
+    const vacShown = sel === null || sel === VAC ? vacList.map(j => V[j]) : [];
     tc.VACANT = V.filter(v => (om || !OM_REG.has(v[7])) && (reg === null || reg.has(v[7])) && (dep === null || dep.has(v[8]))).length;
     document.querySelectorAll("[data-n]").forEach(el => { const v = el.dataset.n; el.textContent = (tc[v] ?? cc[v] ?? 0).toLocaleString("fr-FR"); });
     drawPoints(vacShown);
     renderTable();
-    if (sel !== null) groupPanel(); else overviewPanel(vacShown.length);
+    if (sel === VAC) vacantPanel(); else if (sel !== null) groupPanel(); else overviewPanel(vacShown.length);
     if (fit && shown.length) map.fitBounds(L.latLngBounds(fitPts(shown)).pad(0.1), { maxZoom: 11 });
   }
   function drawPoints(vacShown) {
@@ -825,6 +845,24 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
         ${nvac ? `${nf(nvac)} entrepôts probablement vacants sont aussi affichés (cercles violets en pointillé).` : ""}</p>
       <p class="note">Rond plein : 3PL. Carré : entrepôt en propre (industriel ou distributeur). Cercle violet en pointillé : entrepôt probablement vacant (exploitant parti, bâtiment toujours présent). Anneau vert : client du 3PL connu sur le site (plein : confirmé ou probable ; pointillé : hypothèse) ; anneau gris : relation terminée. Les sites « à vérifier » proviennent de SIRENE seul. Chiffre d'affaires, catégorie, effectif et activité sont ceux de la société exploitante. Emprise bâtie : bâtiment RNB rattaché au point. Volume ICPE : rubrique 1510. Construction, hauteur, matériaux et propriétaire du bâtiment : BDNB (CSTB, millésime ${esc((window.BDNB || {}).m || "")}), rapprochée par les parcelles du bâtiment RNB. Fonds : Plan IGN (couleur, gris, atténué, HD) et photographies aériennes (Géoplateforme, sans clé) ; fond simplifié : routes © OpenStreetMap, limites IGN / INSEE.</p>`;
   }
+  function vacantPanel() {
+    const list = vacantLines();
+    panel.innerHTML = `<div class="frow" style="justify-content:space-between"><h2>${esc(gname(VAC))}</h2><button type="button" class="btn" id="back">Tous les groupes</button></div>
+      <p class="meta">${nf(list.length)} site${list.length > 1 ? "s" : ""} retenu${list.length > 1 ? "s" : ""} par les filtres de géographie et de recherche</p>
+      <div class="kpis">
+        <div class="kpi"><div class="k">Sites</div><div class="v">${nf(list.length)}</div></div>
+        <div class="kpi"><div class="k">Emprise cumulée</div><div class="v">${m2(list.reduce((a, t) => a + t.area, 0))}</div></div>
+        <div class="kpi"><div class="k">Plus grand</div><div class="v">${m2(list.length ? list[0].area : 0)}</div></div>
+        <div class="kpi"><div class="k">Fermés depuis 2020</div><div class="v">${nf(list.filter(t => (t.closed || "") >= "2020").length)}</div></div></div>
+      <table><thead><tr><th>Commune</th><th>Dernier exploitant</th><th class="n">Emprise</th><th class="n">Fermé le</th></tr></thead><tbody>
+      ${list.slice(0, 300).map(t => `<tr tabindex="0" data-j="${t.vac}"><td><span class="nom">${esc(t.where)}</span><span class="small">${esc(V[t.vac][8] || "")}</span></td><td>${esc(t.name)}</td><td class="n">${m2(t.area)}</td><td class="n">${esc(t.closed || "–")}</td></tr>`).join("")}</tbody></table>
+      ${list.length > 300 ? `<p class="note">… et ${nf(list.length - 300)} autres : filtrez par région ou département.</p>` : ""}
+      <p class="note">Entrepôts dont l'exploitant est parti (SIRET fermé) alors que le bâtiment est toujours là ; ce n'est pas une preuve de vacance. Un clic sur une ligne centre la carte ; un clic sur le cercle ouvre sa fiche.</p>`;
+    document.getElementById("back").onclick = clearSel;
+    panel.querySelectorAll("tbody tr[data-j]").forEach(tr => { const v = V[+tr.dataset.j];
+      const go = () => centerAt(v[0], v[1]);
+      tr.onclick = go; tr.onkeydown = e => { if (e.key === "Enter") go(); }; });
+  }
   function groupPanel() {
     const ids = selIds(), all = byGroup.get(sel).filter(i => selSiret === null || detailKey(i, sel) === selSiret);
     const tcount = {}; let area = 0;
@@ -843,7 +881,7 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
         <div class="kpi"><div class="k">Construction médiane</div><div class="v">${years.length ? nf(median(years)) : "–"}</div></div>
         <div class="kpi"><div class="k">Avec client du 3PL</div><div class="v">${nf(ids.filter(i => RING[i]).length)}</div></div></div>
       <table><thead><tr><th>Entrepôt</th><th>Type</th><th class="n">Emprise</th><th class="n">Construit</th><th>Client</th></tr></thead><tbody>
-      ${list.map(i => `<tr tabindex="0" data-i="${i}"><td><span class="nom">${esc(S[i][13])}</span><span class="small">${esc(S[i][16])} · ${esc(D.dept[S[i][6]])}${S[i][7] !== sel ? ` · <b>autre occupant</b> (exploité par ${esc(S[i][17])})` : ""}</span></td>
+      ${list.map(i => `<tr tabindex="0" data-i="${i}"><td><span class="nom">${esc(S[i][13])}</span><span class="small">${esc(S[i][16])} · ${esc(D.dept[S[i][6]])}${opKey(i) !== sel ? ` · <b>autre occupant</b> (exploité par ${esc(S[i][17])})` : ""}</span></td>
         <td><span class="pill"><span class="dot ${D.type[S[i][2]] === "IN_HOUSE" ? "sq" : ""}" style="background:var(${TYPES.find(t => t[0] === D.type[S[i][2]])[2]})"></span>${esc(TLAB[D.type[S[i][2]]])}</span></td>
         <td class="n">${m2(+S[i][27])}</td><td class="n">${yearOf(S[i][12]) ?? "–"}</td><td>${RING[i] ? `<span class="ring" aria-hidden="true"></span>` : ""}</td></tr>`).join("")}</tbody></table>
       <p class="note">Sont affichés les entrepôts retenus par les filtres où le groupe est exploitant, et ceux où une de ses sociétés est un autre occupant d'un site exploité par une autre entreprise (signalés « autre occupant »). Un clic sur une ligne centre la carte sur l'entrepôt ; un clic sur le point ouvre sa fiche. Échap ou « Tous les groupes » revient à la vue d'ensemble.</p>`;
@@ -859,7 +897,10 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
     const k = new Set(byGroup.get(sel) || []);
     return shown.filter(i => k.has(i) && (selSiret === null || detailKey(i, sel) === selSiret));
   }
-  const fitSel = () => { const pts = fitPts(selIds()); if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.2), { maxZoom: 14 }); };
+  const fitSel = () => {
+    const pts = sel === VAC ? vacList.map(j => [V[j][0], V[j][1]]).filter(p => om || p[0] > 40) : fitPts(selIds());
+    if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.2), { maxZoom: 14 });
+  };
   let pinned = null;
   function selectGroup(k, pin) {
     sel = k; selSiret = null; pinned = pin ? k : null; map.closePopup();
@@ -870,13 +911,14 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
   function selectSiret(t) { sel = t.k; selSiret = t.siret; map.closePopup(); render(); fitSel(); }
   // a click on a warehouse in a list: center the map on it and flash it, without opening its card
   let flash = null;
-  function centerSite(i) {
+  function centerAt(lat, lon) {
     map.closePopup();
-    map.setView([S[i][0], S[i][1]], Math.max(map.getZoom(), 15));
+    map.setView([lat, lon], Math.max(map.getZoom(), 15));
     if (flash) map.removeLayer(flash);
-    flash = L.circleMarker([S[i][0], S[i][1]], { radius: 16, weight: 3, color: css("--focus"), fill: false, interactive: false }).addTo(map);
+    flash = L.circleMarker([lat, lon], { radius: 16, weight: 3, color: css("--focus"), fill: false, interactive: false }).addTo(map);
     const f = flash; setTimeout(() => { if (flash === f) { map.removeLayer(f); flash = null; } }, 2500);
   }
+  const centerSite = i => centerAt(S[i][0], S[i][1]);
   function clearSel() { sel = null; selSiret = null; pinned = null; map.closePopup(); render(); map.fitBounds(VIEWS["Métropole"]); }
   document.addEventListener("keydown", e => { if (e.key === "Escape" && sel !== null) clearSel(); });
 
