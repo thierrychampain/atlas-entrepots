@@ -60,11 +60,16 @@ input[type=search] { flex: 1; min-width: 160px; }
   background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.18); padding: 8px;
   display: flex; flex-direction: column; gap: 6px; font-weight: 400; text-transform: none; letter-spacing: 0; }
 .ms-pop input[type=search] { width: 100%; box-sizing: border-box; min-width: 0; }
-.ms-acts { display: flex; flex-wrap: wrap; gap: 4px; }
-.ms-acts button { font: inherit; font-size: 11.5px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 4px; padding: 1px 6px; cursor: pointer; }
-.ms-list { max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; font-size: 12.5px; }
-.ms-list label { display: flex; gap: 6px; align-items: flex-start; cursor: pointer; padding: 2px; border-radius: 3px; }
-.ms-list label:hover { background: var(--row-hover); }
+.ms-btn .x { margin-left: auto; padding: 0 3px; border-radius: 3px; color: var(--muted); font-style: normal; }
+.ms-btn .x:hover { background: var(--row-hover); color: var(--ink); }
+.ms-list { max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; font-size: 12.5px; }
+.ms-opt { display: flex; gap: 6px; align-items: baseline; width: 100%; text-align: left; font: inherit; font-size: 12.5px; color: var(--ink); background: none; border: 0; border-radius: 4px; padding: 3px 6px; cursor: pointer; }
+.ms-opt::before { content: "✓"; width: 10px; flex: none; color: transparent; font-weight: 700; }
+.ms-opt:hover, .ms-opt.cur { background: var(--row-hover); }
+.ms-opt[aria-pressed="true"] { background: var(--row-sel); font-weight: 600; }
+.ms-opt[aria-pressed="true"]::before { color: var(--focus); }
+.ms-opt.all { color: var(--muted); border-bottom: 1px solid var(--line); border-radius: 4px 4px 0 0; margin-bottom: 2px; }
+.ms-hint { font-size: 11px; color: var(--muted); }
 .fld { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; min-width: 0; }
 /* search suggestions */
 .sg { position: absolute; z-index: 2100; top: calc(100% + 2px); left: 72px; right: 0; max-width: 520px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
@@ -106,6 +111,8 @@ tbody tr[aria-selected="true"] { background: var(--row-sel); box-shadow: inset 3
 #map { position: absolute; inset: 0; background: var(--bg); }
 .jump { position: absolute; left: 10px; bottom: 22px; z-index: 900; display: flex; flex-wrap: wrap; gap: 3px; max-width: 70%; }
 .jump button { font: inherit; font-size: 11.5px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 4px; padding: 2px 6px; cursor: pointer; }
+.jump button.om-t[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+.jump button[hidden] { display: none; }
 .panel { min-height: 0; overflow-y: auto; padding: 10px 16px 16px; padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 8px; background: var(--panel); }
 .panel h2 { font-size: 16px; margin: 0; }
 .panel .meta { color: var(--muted); font-size: 12.5px; line-height: 1.45; margin: 0; }
@@ -447,8 +454,19 @@ tbody tr[aria-selected="true"] { background: var(--row-sel); box-shadow: inset 3
   const VIEWS = { "Métropole": [[41.3, -5.2], [51.1, 9.6]], "Corse": [[41.3, 8.5], [43.05, 9.6]], "Guadeloupe": [[15.8, -61.85], [16.55, -61.0]], "Martinique": [[14.38, -61.25], [14.9, -60.8]],
     "Guyane": [[2.1, -54.6], [5.8, -51.6]], "La Réunion": [[-21.4, 55.2], [-20.85, 55.85]], "Mayotte": [[-13.02, 44.95], [-12.62, 45.32]] };
   map.fitBounds(VIEWS["Métropole"]); updVilles();
-  document.getElementById("jump").innerHTML = Object.keys(VIEWS).map(k => `<button type="button" data-k="${k}">${k}</button>`).join("");
-  document.getElementById("jump").addEventListener("click", e => { const k = e.target.dataset.k; if (k) map.fitBounds(VIEWS[k]); });
+  // overseas territories: off by default (the map stays on mainland France); the "Outre-mer" button adds them
+  const OM_REG = new Set(["Guadeloupe", "Martinique", "Guyane", "La Réunion", "Mayotte"]);
+  const OM = S.map(s => OM_REG.has(D.region[s[5]]));
+  let om = false;
+  document.getElementById("jump").innerHTML = Object.keys(VIEWS).map(k => `<button type="button" data-k="${k}"${OM_REG.has(k) ? " hidden" : ""}>${k}</button>`)
+    .join("").replace('<button type="button" data-k="Guadeloupe"', '<button type="button" class="om-t" aria-pressed="false" title="Afficher aussi les entrepôts d\'outre-mer">+ Outre-mer</button><button type="button" data-k="Guadeloupe"');
+  document.getElementById("jump").addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.classList.contains("om-t")) { setOm(!om); return; }
+    if (b.dataset.k) map.fitBounds(VIEWS[b.dataset.k]);
+  });
+  // fit on mainland points when there are some: overseas points would zoom out to the whole world
+  const fitPts = ids => { const main = ids.filter(i => !OM[i]); return (main.length ? main : ids).map(i => [S[i][0], S[i][1]]); };
   new ResizeObserver(() => map.invalidateSize()).observe(document.getElementById("map"));
 
   // markers: circles for 3PL / mixed / unknown, squares for in-house; client ring when a 3PL client is known
@@ -488,51 +506,54 @@ tbody tr[aria-selected="true"] { background: var(--row-sel); box-shadow: inset 3
   }
   chipRow(document.getElementById("types"), TYPES, "types");
   chipRow(document.getElementById("confs"), CONFS, "confs");
-  // ---- multi-choice filter, like an Excel column filter: everything ticked by default, untick to exclude ----
+  // ---- multi-choice filter: nothing chosen = everything; click a line to add it, click again to remove it ----
   const openMs = new Set();
   document.addEventListener("click", e => openMs.forEach(m => { if (!m.el.contains(e.target)) m.close(); }));
   document.addEventListener("keydown", e => { if (e.key === "Escape") openMs.forEach(m => m.close()); });
   function MultiSelect(el, allLabel, onChange) {
-    const m = { el, items: [], sel: new Set() };
+    const m = { el, items: [], sel: new Set() };   // sel = values chosen; empty = no filter
     el.classList.add("ms");
-    el.innerHTML = `<button type="button" class="ms-btn" aria-haspopup="true" aria-expanded="false"><span></span><i aria-hidden="true">▾</i></button>
-      <div class="ms-pop" hidden><input type="search" placeholder="Rechercher" aria-label="Rechercher dans la liste">
-        <div class="ms-acts"><button type="button" data-a="all">Tout cocher</button><button type="button" data-a="none">Tout décocher</button><button type="button" data-a="only">Seulement ceux trouvés</button></div>
-        <div class="ms-list"></div></div>`;
-    const btn = el.querySelector(".ms-btn"), pop = el.querySelector(".ms-pop"), list = el.querySelector(".ms-list"), inp = el.querySelector("input");
-    m.all = () => m.sel.size === m.items.length;
+    el.innerHTML = `<button type="button" class="ms-btn" aria-haspopup="true" aria-expanded="false"><span></span><i class="x" role="button" aria-label="Effacer ce filtre" hidden>×</i><i aria-hidden="true">▾</i></button>
+      <div class="ms-pop" hidden><input type="search" placeholder="Rechercher, Entrée pour choisir" aria-label="Rechercher dans la liste">
+        <div class="ms-list" role="listbox" aria-multiselectable="true"></div><span class="ms-hint">Un clic choisit, un second clic retire. Plusieurs choix possibles.</span></div>`;
+    const btn = el.querySelector(".ms-btn"), x = el.querySelector(".x"), pop = el.querySelector(".ms-pop"), list = el.querySelector(".ms-list"), inp = el.querySelector("input");
+    let cur = 0;
+    m.all = () => m.sel.size === 0;
     m.ok = v => m.all() || m.sel.has(String(v));
-    const visible = () => { const q = inp.value.trim().toLowerCase(); return m.items.filter(([, l]) => !q || l.toLowerCase().includes(q)); };
+    const visible = () => { const q = norm(inp.value.trim()); return m.items.filter(([, l]) => !q || norm(l).includes(q)); };
     const label = () => {
-      const n = m.sel.size, t = m.items.length;
-      btn.firstElementChild.textContent = n === t ? allLabel : n === 0 ? "Aucun" : n === 1 ? m.items.find(x => m.sel.has(x[0]))[1] : `${n} sur ${t}`;
-      btn.classList.toggle("on", n !== t);
+      const n = m.sel.size, names = m.items.filter(it => m.sel.has(it[0])).map(it => it[1]);
+      btn.firstElementChild.textContent = n === 0 ? allLabel : n <= 2 ? names.join(", ") : `${names[0]} + ${n - 1}`;
+      btn.title = names.join(", ");
+      btn.classList.toggle("on", n > 0); x.hidden = n === 0;
     };
     const draw = () => {
-      list.innerHTML = visible().map(([v, l]) => `<label><input type="checkbox" value="${esc(v)}"${m.sel.has(v) ? " checked" : ""}> <span>${esc(l)}</span></label>`).join("")
-        || `<span class="note">Aucun résultat</span>`;
+      const vis = visible(); cur = Math.min(cur, Math.max(0, vis.length - 1));
+      list.innerHTML = (inp.value ? "" : `<button type="button" class="ms-opt all" data-all="1" aria-pressed="${m.all()}">${esc(allLabel)}</button>`)
+        + (vis.map(([v, l], k) => `<button type="button" class="ms-opt${k === cur && inp.value ? " cur" : ""}" role="option" data-v="${esc(v)}" aria-pressed="${m.sel.has(v)}">${esc(l)}</button>`).join("")
+        || `<span class="note">Aucun résultat</span>`);
     };
-    const changed = () => { label(); if (onChange) onChange(); };
-    list.addEventListener("change", e => { const v = e.target.value; e.target.checked ? m.sel.add(v) : m.sel.delete(v); changed(); });
-    inp.addEventListener("input", draw);
-    el.querySelector(".ms-acts").addEventListener("click", e => {
-      const a = e.target.dataset.a; if (!a) return;
-      const vis = visible().map(x => x[0]);
-      if (a === "all") vis.forEach(v => m.sel.add(v));
-      else if (a === "none") vis.forEach(v => m.sel.delete(v));
-      else { m.sel.clear(); vis.forEach(v => m.sel.add(v)); }
-      draw(); changed();
+    const changed = () => { label(); draw(); if (onChange) onChange(); };
+    const toggle = v => { m.sel.has(v) ? m.sel.delete(v) : m.sel.add(v); changed(); };
+    list.addEventListener("click", e => { const o = e.target.closest(".ms-opt"); if (!o) return;
+      if (o.dataset.all) { m.sel.clear(); changed(); } else toggle(o.dataset.v); });
+    inp.addEventListener("input", () => { cur = 0; draw(); });
+    inp.addEventListener("keydown", e => {
+      const vis = visible();
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); cur = (cur + (e.key === "ArrowDown" ? 1 : -1) + vis.length) % Math.max(1, vis.length); draw(); }
+      else if (e.key === "Enter" && vis[cur]) { e.preventDefault(); toggle(vis[cur][0]); inp.select(); }
     });
+    x.addEventListener("click", e => { e.stopPropagation(); m.sel.clear(); changed(); });
     m.close = () => { pop.hidden = true; btn.setAttribute("aria-expanded", "false"); openMs.delete(m); };
     btn.addEventListener("click", () => {
       if (!pop.hidden) { m.close(); return; }
-      openMs.forEach(x => x.close());
+      openMs.forEach(o => o.close());
       pop.hidden = false; btn.setAttribute("aria-expanded", "true"); openMs.add(m);
-      inp.value = ""; draw(); inp.focus();
+      inp.value = ""; cur = 0; draw(); inp.focus();
     });
-    // new list of choices: everything ticked again
-    m.setItems = items => { m.items = items.map(([v, l]) => [String(v), l]); m.sel = new Set(m.items.map(x => x[0])); label(); if (!pop.hidden) draw(); };
-    m.reset = () => { m.sel = new Set(m.items.map(x => x[0])); label(); };
+    // new list of choices: keep the choices that are still offered
+    m.setItems = items => { m.items = items.map(([v, l]) => [String(v), l]); const keep = new Set(m.items.map(it => it[0])); m.sel = new Set([...m.sel].filter(v => keep.has(v))); label(); if (!pop.hidden) draw(); };
+    m.reset = () => { m.sel.clear(); label(); };
     return m;
   }
   const sortFr = a => a.slice().sort((x, y) => x[1].localeCompare(y[1], "fr"));
@@ -550,11 +571,18 @@ tbody tr[aria-selected="true"] { background: var(--row-sel); box-shadow: inset 3
   MS.cat = MultiSelect(document.getElementById("cat"), "Toutes", onFilter());
   MS.eff = MultiSelect(document.getElementById("eff"), "Tous", onFilter());
   MS.naf = MultiSelect(document.getElementById("naf"), "Toutes", onFilter());
-  MS.region.setItems(sortFr(D.region.map((r, i) => [i, r || "(non renseignée)"])));
+  const fillRegions = () => MS.region.setItems(sortFr(D.region.map((r, i) => [i, r || "(non renseignée)"]).filter(([, r]) => om || !OM_REG.has(r))));
+  fillRegions();
+  function setOm(on) {
+    om = on;
+    document.querySelectorAll("#jump button").forEach(b => { if (OM_REG.has(b.dataset.k)) b.hidden = !om; if (b.classList.contains("om-t")) { b.setAttribute("aria-pressed", om); b.textContent = om ? "− Outre-mer" : "+ Outre-mer"; } });
+    fillRegions(); fillDepts(); page = 0; render();
+    if (!om) map.fitBounds(VIEWS["Métropole"]);
+  }
   // departments offered: those of the ticked regions
   function fillDepts() {
     const seen = new Set();
-    S.forEach(s => { if (MS.region.ok(s[5])) seen.add(s[6]); });
+    S.forEach((s, i) => { if ((om || !OM[i]) && MS.region.ok(s[5])) seen.add(s[6]); });
     MS.dept.setItems([...seen].map(i => [i, D.dept[i] || "(non renseigné)"]).sort((a, b) => a[1].localeCompare(b[1], "fr", { numeric: true })));
   }
   fillDepts();
@@ -597,6 +625,7 @@ tbody tr[aria-selected="true"] { background: var(--row-sel); box-shadow: inset 3
   function pass(s, ignore, i) {
     if (ignore !== "type" && !st.types.has(D.type[s[2]])) return false;
     if (ignore !== "conf" && !st.confs.has(D.conf[s[8]])) return false;
+    if (!om && OM[i]) return false;
     if (!MS.region.ok(s[5]) || !MS.dept.ok(s[6]) || !MS.sector.ok(s[4]) || !MS.sub.ok(s[3])) return false;
     if (qm && !qm(SEARCHN[i], SEARCHC[i])) return false;
     if (st.clientOnly && !RING[i]) return false;
@@ -706,14 +735,14 @@ tbody tr[aria-selected="true"] { background: var(--row-sel); box-shadow: inset 3
     // vacant warehouses: geography and search filters only (no operator)
     const regOk = new Set(D.region.filter((r, k) => MS.region.ok(k))), depOk = new Set(D.dept.filter((d, k) => MS.dept.ok(k)));
     const reg = MS.region.all() ? null : regOk, dep = MS.dept.all() ? null : depOk;
-    const vacShown = st.types.has("VACANT") && !sel ? V.filter(v => (reg === null || reg.has(v[7])) && (dep === null || dep.has(v[8]))
+    const vacShown = st.types.has("VACANT") && !sel ? V.filter(v => (om || !OM_REG.has(v[7])) && (reg === null || reg.has(v[7])) && (dep === null || dep.has(v[8]))
       && (!qm || qm(VSEARCHN[V.indexOf(v)], VSEARCHC[V.indexOf(v)]))) : [];
-    tc.VACANT = V.filter(v => (reg === null || reg.has(v[7])) && (dep === null || dep.has(v[8]))).length;
+    tc.VACANT = V.filter(v => (om || !OM_REG.has(v[7])) && (reg === null || reg.has(v[7])) && (dep === null || dep.has(v[8]))).length;
     document.querySelectorAll("[data-n]").forEach(el => { const v = el.dataset.n; el.textContent = (tc[v] ?? cc[v] ?? 0).toLocaleString("fr-FR"); });
     drawPoints(vacShown);
     renderTable();
     if (sel !== null) groupPanel(); else overviewPanel(vacShown.length);
-    if (fit && shown.length) map.fitBounds(L.latLngBounds(shown.map(i => [S[i][0], S[i][1]])).pad(0.1), { maxZoom: 11 });
+    if (fit && shown.length) map.fitBounds(L.latLngBounds(fitPts(shown)).pad(0.1), { maxZoom: 11 });
   }
   function drawPoints(vacShown) {
     layer.clearLayers(); vacLayer.clearLayers();
@@ -765,7 +794,7 @@ tbody tr[aria-selected="true"] { background: var(--row-sel); box-shadow: inset 3
   }
   function selectGroup(k) {
     sel = k; map.closePopup(); render();
-    const pts = shown.filter(i => byGroup.get(k).includes(i)).map(i => [S[i][0], S[i][1]]);
+    const pts = fitPts(shown.filter(i => byGroup.get(k).includes(i)));
     if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.2), { maxZoom: 13 });
   }
   function selectSite(i) {
