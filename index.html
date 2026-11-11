@@ -797,10 +797,12 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
   function drawPoints(vacShown) {
     layer.clearLayers(); vacLayer.clearLayers();
     const pts = selIds();
+    // drawing order = click order on the canvas: vacant circles first, under the warehouses, so that a click on a
+    // warehouse point opens the warehouse card and not the card of a larger vacant circle nearby
+    vacShown.forEach(v => vacLayer.addLayer(vacMarkers[V.indexOf(v)]));
     const ringed = [];
     pts.forEach(i => { if (RING[i]) ringed.push(i); else layer.addLayer(markers[i]); });
     ringed.forEach(i => layer.addLayer(markers[i]));   // sites with a known client on top
-    vacShown.forEach(v => vacLayer.addLayer(vacMarkers[V.indexOf(v)]));
     if (heat && map.hasLayer(heat)) heat.setLatLngs(pts.map(i => [S[i][0], S[i][1], 1]));
   }
   map.on("overlayadd", e => { if (e.layer === heat) heat.setLatLngs(shown.map(i => [S[i][0], S[i][1], 1])); });
