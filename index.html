@@ -505,7 +505,7 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
     .bindPopup(() => vacPopup(v), { maxWidth: 360 }));
   map.on("popupopen", e => {
     const b = e.popup.getElement().querySelector("[data-group]");
-    if (b) b.addEventListener("click", () => { selectGroup(+b.dataset.group); map.closePopup(); });
+    if (b) b.addEventListener("click", () => { selectGroup(+b.dataset.group, true); map.closePopup(); });
   });
   const sizeFor = z => z < 7 ? 3.2 : z < 9 ? 4.2 : z < 11 ? 5.5 : 7;
   map.on("zoomend", () => { const r = sizeFor(map.getZoom()); markers.forEach(m => m.setRadius(m instanceof Square ? r * 0.86 : r)); });
@@ -526,7 +526,8 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
   chipRow(document.getElementById("confs"), CONFS, "confs");
   // ---- multi-choice filter: nothing chosen = everything; click a line to add it, click again to remove it ----
   const openMs = new Set();
-  document.addEventListener("click", e => openMs.forEach(m => { if (!m.el.contains(e.target)) m.close(); }));
+  // close on a click outside the list only: composedPath() still holds the clicked line after the list is redrawn
+  document.addEventListener("click", e => { const path = e.composedPath(); openMs.forEach(m => { if (!path.includes(m.el)) m.close(); }); });
   document.addEventListener("keydown", e => { if (e.key === "Escape") openMs.forEach(m => m.close()); });
   function MultiSelect(el, allLabel, onChange) {
     const m = { el, items: [], sel: new Set() };   // sel = values chosen; empty = no filter
@@ -630,7 +631,7 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
   Object.entries(opN).forEach(([o, n]) => addTerm(o, "Exploitant", n));
   Object.entries(comN).forEach(([c, n]) => addTerm(c, "Commune", n));
   Suggest(qInput, terms, t => { clearTimeout(qt);
-    if (t.g !== undefined) { setQuery(""); qInput.value = t.label; selectGroup(t.g); }   // a group: show it on the map
+    if (t.g !== undefined) { setQuery(""); qInput.value = t.label; selectGroup(t.g, true); }   // a group: its segment, first line of the table
     else { setQuery(t.label); render(true); } });
   document.getElementById("reset").onclick = () => {
     st = ALL(); sel = null; page = 0;
@@ -718,6 +719,9 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
     const cols = view === "group" ? GCOLS : SCOLS, so = sort[view], c = cols.find(x => x.id === so.id);
     rows = view === "group" ? groupsOfShown() : shown.slice();
     rows.sort((a, b) => { const va = c.v(a), vb = c.v(b); return (typeof va === "string" ? va.localeCompare(vb, "fr") : va - vb) * so.dir; });
+    if (view === "group" && pinned !== null && pinned === sel) {   // a group chosen from the search box or a card: first line, unfolded
+      const j = rows.findIndex(g => g.k === pinned); if (j > 0) rows.unshift(rows.splice(j, 1)[0]);
+    }
     const pages = Math.max(1, Math.ceil(rows.length / PAGE)); page = Math.max(0, Math.min(page, pages - 1));
     const slice = rows.slice(page * PAGE, page * PAGE + PAGE);
     const key = r => view === "group" ? r.k : r;
@@ -856,7 +860,13 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
     return shown.filter(i => k.has(i) && (selSiret === null || detailKey(i, sel) === selSiret));
   }
   const fitSel = () => { const pts = fitPts(selIds()); if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.2), { maxZoom: 14 }); };
-  function selectGroup(k) { sel = k; selSiret = null; map.closePopup(); render(); fitSel(); }
+  let pinned = null;
+  function selectGroup(k, pin) {
+    sel = k; selSiret = null; pinned = pin ? k : null; map.closePopup();
+    if (pin) { page = 0; if (view !== "group") { view = "group"; document.getElementById("vGroup").setAttribute("aria-pressed", true); document.getElementById("vSite").setAttribute("aria-pressed", false); } }
+    render(); fitSel();
+    if (pin) document.getElementById("tablewrap").scrollTop = 0;
+  }
   function selectSiret(t) { sel = t.k; selSiret = t.siret; map.closePopup(); render(); fitSel(); }
   // a click on a warehouse in a list: center the map on it and flash it, without opening its card
   let flash = null;
@@ -867,7 +877,7 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
     flash = L.circleMarker([S[i][0], S[i][1]], { radius: 16, weight: 3, color: css("--focus"), fill: false, interactive: false }).addTo(map);
     const f = flash; setTimeout(() => { if (flash === f) { map.removeLayer(f); flash = null; } }, 2500);
   }
-  function clearSel() { sel = null; selSiret = null; map.closePopup(); render(); map.fitBounds(VIEWS["Métropole"]); }
+  function clearSel() { sel = null; selSiret = null; pinned = null; map.closePopup(); render(); map.fitBounds(VIEWS["Métropole"]); }
   document.addEventListener("keydown", e => { if (e.key === "Escape" && sel !== null) clearSel(); });
 
   // theme changes: recolour the drawn base and the markers
