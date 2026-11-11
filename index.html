@@ -183,6 +183,7 @@ main { position: relative; min-width: 0; }
 <script src="vacants.js" charset="utf-8"></script>
 <script src="clients.js" charset="utf-8"></script>
 <script src="entreprises.js" charset="utf-8"></script>
+<script src="bdnb.js" charset="utf-8"></script>
 <script>
 (function () {
   const D = window.DICT, S = window.SITES;
@@ -220,6 +221,21 @@ main { position: relative; min-width: 0; }
     const site = C.site[id] || [], com = C.commune[id] || [];
     return (site.length ? `<div class="cl"><h4>Clients du 3PL sur ce site</h4><ul>${site.map(li).join("")}</ul></div>` : "")
       + (com.length ? `<div class="cl"><h4>Clients du groupe dans la commune (bâtiment non identifié)</h4><ul>${com.map(li).join("")}</ul></div>` : "");
+  }
+  // building of the warehouse from the BDNB (bdnb.js, built by work/sites/map_bdnb.py): [year, doubtful year, height m,
+  // levels, usage, wall, roof, owners, tertiary DPE, BDNB building-group footprint m², footprint ratio BDNB / Atlas]
+  const BD = (window.BDNB || { s: {} }).s;
+  function bdnbRows(id) {
+    const b = BD[id]; if (!b) return "";
+    const row = (k, x) => x ? `<dt>${k}</dt><dd>${x}</dd>` : "";
+    const mat = x => x && x !== "INDETERMINE" ? x.toLowerCase() : "";
+    const wide = b[10] > 2 ? ` <span class="note">(groupe de bâtiments de ${Number(b[9]).toLocaleString("fr-FR")} m², plus large que l'entrepôt)</span>` : "";
+    return row("Construction", b[0] ? `<span class="mono">${b[0]}</span>` + (b[1] ? ` <span class="note">(valeur par défaut des fichiers fonciers, douteuse)</span>` : "") + wide
+                                    : `<span class="note">année non renseignée (BDNB)</span>`)
+      + row("Hauteur", b[2] ? `<span class="mono">${b[2]} m</span>` + (b[3] ? ` · ${b[3]} niveau${b[3] > 1 ? "x" : ""}` : "") : "")
+      + row("Matériaux", [mat(b[5]) && "murs : " + esc(mat(b[5])), mat(b[6]) && "toit : " + esc(mat(b[6]))].filter(Boolean).join(" · "))
+      + row("Propriétaire (BDNB)", esc(b[7]))
+      + row("DPE tertiaire", b[8] ? `classe ${esc(b[8])}` : "");
   }
   const signalRow = id => { const g = C.signal[id]; return g ? `<dt>Signal</dt><dd>${esc(g[0])}<br><span class="note">${esc(g[1])}</span></dd>` : ""; };
 
@@ -315,6 +331,7 @@ main { position: relative; min-width: 0; }
         ${row("Statut ICPE", esc(v[15]))}
         ${row("Volume ICPE", v[16] ? `<span class="mono">${Number(v[16]).toLocaleString("fr-FR")} m³</span>` : "")}
         ${row("Emprise bâtie", v[17] ? `<span class="mono">${Number(v[17]).toLocaleString("fr-FR")} m²</span> <span class="note">(RNB ${esc(v[18])})</span>` : "")}
+        ${bdnbRows(v[2])}
         ${row("Indices", esc(v[19]))}
         ${row("Identifiant", `<span class="mono">${esc(v[2])}</span>`)}
       </dl>
@@ -425,6 +442,7 @@ main { position: relative; min-width: 0; }
         ${row("Lien usine", D.fr[s[11]] ? esc(FR[D.fr[s[11]]] || D.fr[s[11]]) + (s[22] ? `<br><span class="note">${esc(s[22])}</span>` : "") : "")}
         ${row("Emprise bâtie", s[27] ? `<span class="mono">${Number(s[27]).toLocaleString("fr-FR")} m²</span> <span class="note">(bâtiment RNB${s[28] ? " " + esc(s[28]) : ""})</span>` : (s[29] === "NO_BUILDING_FOUND" ? `<span class="note">aucun bâtiment RNB trouvé au point</span>` : ""))}
         ${row("Volume ICPE", s[23] ? `<span class="mono">${Number(s[23]).toLocaleString("fr-FR")} m³</span> (rubrique 1510)` : "")}
+        ${bdnbRows(s[12])}
         ${row("Activité", esc(s[24]))}
         ${row("Statut", esc(VER[D.ver[s[9]]] || D.ver[s[9]]))}
         ${row("Contrôle", s[31] ?`<span class="note">${esc(s[31])}</span>` : "")}
