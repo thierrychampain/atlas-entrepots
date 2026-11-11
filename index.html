@@ -99,6 +99,13 @@ td.n { text-align: right; font-family: var(--f-mono); font-variant-numeric: tabu
 tbody tr { cursor: pointer; }
 tbody tr:hover { background: var(--row-hover); }
 tbody tr[aria-selected="true"] { background: var(--row-sel); box-shadow: inset 3px 0 0 var(--focus); }
+tbody tr.grp td { padding-top: 8px; padding-bottom: 8px; font-size: 13px; }
+tbody tr.grp .nom::before { content: "▸ "; color: var(--muted); }
+tbody tr.grp.open .nom::before { content: "▾ "; }
+tbody tr.sub td { font-size: 12px; padding-top: 3px; padding-bottom: 3px; }
+tbody tr.sub td:first-child { padding-left: 24px; }
+tbody tr.sub .nom { font-weight: 500; }
+tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; cursor: default; }
 .nom { font-weight: 600; }
 .small { display: block; color: var(--muted); font-size: 11.5px; }
 .mono { font-family: var(--f-mono); font-size: 11.5px; }
@@ -306,12 +313,11 @@ tbody tr[aria-selected="true"] { background: var(--row-sel); box-shadow: inset 3
       + row("Effectif", [e[3] ? `société : ${TRANCHE[e[3]] || e[3]}` : "", e[4] ? `site : ${TRANCHE[e[4]] || e[4]}` : ""].filter(Boolean).join(" · "))
       + row("Activité (NAF)", e[5] ? `<span class="mono">${esc(e[5])}</span> ${esc(ENT.naf.sub[e[5]] || "")}` : "");
   }
-  // group index: a site belongs to its operator's group and to the groups of its other occupants
-  const gidKey = new Map(D.group.map((g, k) => [g.split("|")[1], k]).filter(([gid]) => gid));   // a site without group_id must not catch every site
+  // group index: a site belongs to the group of its operator only (a group that is just another occupant of a site
+  // operated by someone else does not get that site)
   const byGroup = new Map();
-  const addTo = (k, i) => { if (!byGroup.has(k)) byGroup.set(k, []); byGroup.get(k).push(i); };
-  S.forEach((s, i) => { addTo(s[7], i); (s[30] || "").split(",").filter(Boolean).forEach(gid => { const k = gidKey.get(gid); if (k !== undefined && k !== s[7]) addTo(k, i); }); });
-  const groupsOf = i => { const ks = [S[i][7]]; (S[i][30] || "").split(",").filter(Boolean).forEach(gid => { const k = gidKey.get(gid); if (k !== undefined && k !== S[i][7]) ks.push(k); }); return ks; };
+  S.forEach((s, i) => { if (!byGroup.has(s[7])) byGroup.set(s[7], []); byGroup.get(s[7]).push(i); });
+  const siretOf = i => S[i][19] || S[i][12];   // establishment of the operator (the site id when no SIRET)
   // ---- tolerant text search: by word, without accents or punctuation, and ignoring spaces ("le roy merlin" = "LEROY-MERLIN") ----
   const norm = t => String(t ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   const compact = n => n.replace(/ /g, "");
@@ -669,18 +675,32 @@ tbody tr[aria-selected="true"] { background: var(--row-sel); box-shadow: inset 3
       th.onclick = go; th.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } };
     });
   }
-  function groupsOfShown() {
-    const G = new Map();
-    shown.forEach(i => groupsOf(i).forEach(k => {
-      let g = G.get(k);
-      if (!g) { g = { k, name: gname(k), ids: [], tc: {}, area: 0, big: 0, cl: 0, years: [], ca: null, regs: {} }; G.set(k, g); }
+  // consolidated figures of a set of sites (a group, or one SIRET of a group)
+  function agg(base, ids) {
+    const g = Object.assign({ ids: [], tc: {}, area: 0, big: 0, cl: 0, years: [], ca: null, regs: {} }, base);
+    ids.forEach(i => {
       const s = S[i], a = +s[27] || 0, y = yearOf(s[12]), e = E[i];
       g.ids.push(i); g.tc[D.type[s[2]]] = (g.tc[D.type[s[2]]] || 0) + 1; g.area += a; g.big = Math.max(g.big, a);
       if (RING[i]) g.cl++; if (y) g.years.push(y); if (e && e[0] !== null) g.ca = Math.max(g.ca ?? 0, e[0]);
       const r = D.region[s[5]] || "(non renseignée)"; g.regs[r] = (g.regs[r] || 0) + 1;
-    }));
-    return [...G.values()].map(g => { const rs = Object.entries(g.regs).sort((a, b) => b[1] - a[1]); return Object.assign(g, { year: median(g.years), region: rs[0][0], nreg: rs.length }); });
+    });
+    const rs = Object.entries(g.regs).sort((a, b) => b[1] - a[1]);
+    return Object.assign(g, { year: median(g.years), region: rs.length ? rs[0][0] : "", nreg: rs.length });
   }
+  function groupsOfShown() {
+    const G = new Map();
+    shown.forEach(i => { const k = S[i][7]; if (!G.has(k)) G.set(k, []); G.get(k).push(i); });
+    return [...G].map(([k, ids]) => agg({ k, name: gname(k) }, ids));
+  }
+  // the SIRETs of a group within the shown sites (detail lines under the group line)
+  function siretsOf(g) {
+    const M = new Map();
+    g.ids.forEach(i => { const k = siretOf(i); if (!M.has(k)) M.set(k, []); M.get(k).push(i); });
+    return [...M].map(([k, ids]) => { const s = S[ids[0]];
+      return agg({ siret: k, name: s[17] || s[13], where: [...new Set(ids.map(i => S[i][16]))].slice(0, 2).join(", ") + (ids.length > 2 ? "…" : "") }, ids); })
+      .sort((a, b) => b.area - a.area || b.ids.length - a.ids.length);
+  }
+  const SUB_MAX = 40;
   function renderTable() {
     buildHead();
     const cols = view === "group" ? GCOLS : SCOLS, so = sort[view], c = cols.find(x => x.id === so.id);
@@ -689,10 +709,26 @@ tbody tr[aria-selected="true"] { background: var(--row-sel); box-shadow: inset 3
     const pages = Math.max(1, Math.ceil(rows.length / PAGE)); page = Math.max(0, Math.min(page, pages - 1));
     const slice = rows.slice(page * PAGE, page * PAGE + PAGE);
     const key = r => view === "group" ? r.k : r;
-    tbody.innerHTML = slice.map(r => `<tr tabindex="0" aria-selected="${view === "group" ? sel === r.k : false}">${cols.map(c => `<td class="${c.n ? "n" : ""}">${c.h(r)}</td>`).join("")}</tr>`).join("")
-      || `<tr><td colspan="${cols.length}" class="note">Aucun entrepôt ne correspond à ces filtres.</td></tr>`;
+    const acts = [];   // one action per clickable line, in order
+    const cell = (c, r) => `<td class="${c.n ? "n" : ""}">${c.h(r)}</td>`;
+    const subName = (t, g) => `<span class="nom mono">${/^\d{14}$/.test(t.siret) ? "SIRET " + esc(t.siret) : "sans SIRET"}</span><span class="small">${esc(t.where)}${norm(t.name) !== norm(g.name) ? " · " + esc(t.name) : ""}</span>`;
+    let html = "";
+    slice.forEach(r => {
+      if (view !== "group") { acts.push(() => centerSite(r)); html += `<tr tabindex="0">${cols.map(c => cell(c, r)).join("")}</tr>`; return; }
+      const open = sel === r.k;
+      acts.push(() => open && selSiret === null ? clearSel() : selectGroup(r.k));
+      html += `<tr tabindex="0" class="grp${open ? " open" : ""}" aria-expanded="${open}" aria-selected="${open && selSiret === null}">${cols.map(c => cell(c, r)).join("")}</tr>`;
+      if (!open) return;
+      const subs = siretsOf(r);
+      subs.slice(0, SUB_MAX).forEach(t => {
+        acts.push(() => selectSiret(t));
+        html += `<tr tabindex="0" class="sub" aria-selected="${selSiret === t.siret}">${cols.map(c => c.id === "nom" ? `<td>${subName(t, r)}</td>` : cell(c, t)).join("")}</tr>`;
+      });
+      if (subs.length > SUB_MAX) html += `<tr class="more"><td colspan="${cols.length}">… et ${nf(subs.length - SUB_MAX)} autres SIRET (filtrez par région ou département pour les voir)</td></tr>`;
+    });
+    tbody.innerHTML = html || `<tr><td colspan="${cols.length}" class="note">Aucun entrepôt ne correspond à ces filtres.</td></tr>`;
     tbody.querySelectorAll("tr[tabindex]").forEach((tr, j) => {
-      const r = slice[j], go = () => view === "group" ? selectGroup(r.k) : selectSite(r);
+      const go = acts[j];
       tr.onclick = go; tr.onkeydown = e => { if (e.key === "Enter") go(); };
     });
     const ng = view === "group" ? rows.length : new Set(shown.map(i => S[i][7])).size;
@@ -746,7 +782,7 @@ tbody tr[aria-selected="true"] { background: var(--row-sel); box-shadow: inset 3
   }
   function drawPoints(vacShown) {
     layer.clearLayers(); vacLayer.clearLayers();
-    const pts = sel !== null ? shown.filter(i => byGroup.get(sel).includes(i)) : shown;
+    const pts = selIds();
     const ringed = [];
     pts.forEach(i => { if (RING[i]) ringed.push(i); else layer.addLayer(markers[i]); });
     ringed.forEach(i => layer.addLayer(markers[i]));   // sites with a known client on top
@@ -770,12 +806,13 @@ tbody tr[aria-selected="true"] { background: var(--row-sel); box-shadow: inset 3
       <p class="note">Rond plein : 3PL. Carré : entrepôt en propre (industriel ou distributeur). Cercle violet en pointillé : entrepôt probablement vacant (exploitant parti, bâtiment toujours présent). Anneau vert : client du 3PL connu sur le site (plein : confirmé ou probable ; pointillé : hypothèse) ; anneau gris : relation terminée. Les sites « à vérifier » proviennent de SIRENE seul. Chiffre d'affaires, catégorie, effectif et activité sont ceux de la société exploitante. Emprise bâtie : bâtiment RNB rattaché au point. Volume ICPE : rubrique 1510. Construction, hauteur, matériaux et propriétaire du bâtiment : BDNB (CSTB, millésime ${esc((window.BDNB || {}).m || "")}), rapprochée par les parcelles du bâtiment RNB. Fonds : Plan IGN et photographies aériennes (Géoplateforme), OpenStreetMap (CARTO) ; fond simplifié : routes © OpenStreetMap, limites IGN / INSEE.</p>`;
   }
   function groupPanel() {
-    const ids = shown.filter(i => byGroup.get(sel).includes(i)), all = byGroup.get(sel);
+    const ids = selIds(), all = byGroup.get(sel).filter(i => selSiret === null || siretOf(i) === selSiret);
     const tcount = {}; let area = 0;
     ids.forEach(i => { tcount[D.type[S[i][2]]] = (tcount[D.type[S[i][2]]] || 0) + 1; area += +S[i][27] || 0; });
     const years = ids.map(i => yearOf(S[i][12])).filter(Boolean);
     const list = ids.slice().sort((a, b) => (+S[b][27] || 0) - (+S[a][27] || 0));
-    panel.innerHTML = `<div class="frow" style="justify-content:space-between"><h2>${esc(gname(sel))}</h2><button type="button" class="btn" id="back">Tous les groupes</button></div>
+    const head = selSiret === null ? esc(gname(sel)) : `${esc((ids[0] ?? all[0]) !== undefined && S[ids[0] ?? all[0]][17] || gname(sel))} <span class="small mono">SIRET ${esc(String(selSiret).replace(/^WH-/, ""))} · groupe ${esc(gname(sel))}</span>`;
+    panel.innerHTML = `<div class="frow" style="justify-content:space-between"><h2>${head}</h2><button type="button" class="btn" id="back">Tous les groupes</button></div>
       <p class="meta">${nf(ids.length)} site${ids.length > 1 ? "s" : ""} affiché${ids.length > 1 ? "s" : ""}${ids.length < all.length ? ` sur ${nf(all.length)} (filtres actifs)` : ""} · ${TYPES.filter(t => tcount[t[0]]).map(t => `${nf(tcount[t[0]])} ${t[1].toLowerCase()}`).join(", ")}</p>
       <div class="kpis">
         <div class="kpi"><div class="k">Sites</div><div class="v">${nf(ids.length)}</div></div>
@@ -786,23 +823,32 @@ tbody tr[aria-selected="true"] { background: var(--row-sel); box-shadow: inset 3
       ${list.map(i => `<tr tabindex="0" data-i="${i}"><td><span class="nom">${esc(S[i][13])}</span><span class="small">${esc(S[i][16])} · ${esc(D.dept[S[i][6]])}</span></td>
         <td><span class="pill"><span class="dot ${D.type[S[i][2]] === "IN_HOUSE" ? "sq" : ""}" style="background:var(${TYPES.find(t => t[0] === D.type[S[i][2]])[2]})"></span>${esc(TLAB[D.type[S[i][2]]])}</span></td>
         <td class="n">${m2(+S[i][27])}</td><td class="n">${yearOf(S[i][12]) ?? "–"}</td><td>${RING[i] ? `<span class="ring" aria-hidden="true"></span>` : ""}</td></tr>`).join("")}</tbody></table>
-      <p class="note">Le groupe réunit les sites de ses sociétés exploitantes et ceux où une société du groupe est un autre occupant. Échap ou « Tous les groupes » revient à la vue d'ensemble.</p>`;
+      <p class="note">Seuls les entrepôts exploités par le groupe et retenus par les filtres sont affichés. Un clic sur une ligne centre la carte sur l'entrepôt ; un clic sur le point ouvre sa fiche. Échap ou « Tous les groupes » revient à la vue d'ensemble.</p>`;
     document.getElementById("back").onclick = clearSel;
     panel.querySelectorAll("tbody tr[data-i]").forEach(tr => { const i = +tr.dataset.i;
-      const go = () => { map.setView([S[i][0], S[i][1]], Math.max(map.getZoom(), 14)); markers[i].openPopup(); };
+      const go = () => centerSite(i);
       tr.onclick = go; tr.onkeydown = e => { if (e.key === "Enter") go(); }; });
   }
-  function selectGroup(k) {
-    sel = k; map.closePopup(); render();
-    const pts = fitPts(shown.filter(i => byGroup.get(k).includes(i)));
-    if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.2), { maxZoom: 13 });
+  // selected segment: the group's sites (or one SIRET's) among the sites that pass the filters
+  let selSiret = null;
+  function selIds() {
+    if (sel === null) return shown;
+    const k = new Set(byGroup.get(sel) || []);
+    return shown.filter(i => k.has(i) && (selSiret === null || siretOf(i) === selSiret));
   }
-  function selectSite(i) {
-    sel = S[i][7]; render();
-    map.setView([S[i][0], S[i][1]], Math.max(map.getZoom(), 14));
-    setTimeout(() => markers[i].openPopup(), 50);
+  const fitSel = () => { const pts = fitPts(selIds()); if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.2), { maxZoom: 14 }); };
+  function selectGroup(k) { sel = k; selSiret = null; map.closePopup(); render(); fitSel(); }
+  function selectSiret(t) { sel = S[t.ids[0]][7]; selSiret = t.siret; map.closePopup(); render(); fitSel(); }
+  // a click on a warehouse in a list: center the map on it and flash it, without opening its card
+  let flash = null;
+  function centerSite(i) {
+    map.closePopup();
+    map.setView([S[i][0], S[i][1]], Math.max(map.getZoom(), 15));
+    if (flash) map.removeLayer(flash);
+    flash = L.circleMarker([S[i][0], S[i][1]], { radius: 16, weight: 3, color: css("--focus"), fill: false, interactive: false }).addTo(map);
+    const f = flash; setTimeout(() => { if (flash === f) { map.removeLayer(f); flash = null; } }, 2500);
   }
-  function clearSel() { sel = null; map.closePopup(); render(); map.fitBounds(VIEWS["Métropole"]); }
+  function clearSel() { sel = null; selSiret = null; map.closePopup(); render(); map.fitBounds(VIEWS["Métropole"]); }
   document.addEventListener("keydown", e => { if (e.key === "Escape" && sel !== null) clearSel(); });
 
   // theme changes: recolour the drawn base and the markers
