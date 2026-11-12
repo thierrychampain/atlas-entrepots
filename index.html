@@ -445,7 +445,8 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
   // =====================================================================================
   // MAP — IGN base map by default; the drawn base map stays available offline
   // =====================================================================================
-  const map = L.map("map", { preferCanvas: true, zoomSnap: 0.25, zoomControl: false, minZoom: 4, maxZoom: 19 });
+  // inertiaMaxSpeed: a quick swipe must not throw the map to the other side of the world
+  const map = L.map("map", { preferCanvas: true, zoomSnap: 0.25, zoomControl: false, minZoom: 4, maxZoom: 19, inertiaMaxSpeed: 1200 });
   map.attributionControl.setPrefix(false);
   L.control.zoom({ position: "topright" }).addTo(map);
   // sites and vacant warehouses share one canvas: a second canvas on top would swallow the clicks meant for the first
@@ -511,19 +512,27 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
   } });
   const layer = L.layerGroup().addTo(map);
   const colorOf = t => css(TYPES.find(x => x[0] === D.type[t])[2]);
-  const POP_H = () => Math.max(260, document.getElementById("map").clientHeight - 70);   // a long card scrolls inside the map
   const markers = S.map((s, i) => {
     const opts = Object.assign({ renderer, radius: 3.6, fillColor: colorOf(s[2]), fillOpacity: 0.88 }, ringStyle(i));
     const m = D.type[s[2]] === "IN_HOUSE" ? new Square([s[0], s[1]], Object.assign(opts, { radius: 3.1 })) : L.circleMarker([s[0], s[1]], opts);
-    m.bindPopup(() => popup(i), { maxWidth: 360, maxHeight: POP_H() });
+    m.on("click", () => showCard(popup(i), s[0], s[1]));   // the card opens in the panel under the map: the map stays free
     return m;
   });
   const vacMarkers = V.map(v => L.circleMarker([v[0], v[1]], { renderer, radius: 5.5, weight: 2, dashArray: "3 2", color: css("--c-vacant"), fillColor: css("--c-vacant"), fillOpacity: 0.12 })
-    .bindPopup(() => vacPopup(v), { maxWidth: 360, maxHeight: POP_H() }));
-  map.on("popupopen", e => {
-    const b = e.popup.getElement().querySelector("[data-group]");
-    if (b) b.addEventListener("click", () => { const g = b.dataset.group; selectGroup(PSEUDO[g] ? g : +g, true); map.closePopup(); });
-  });
+    .on("click", () => showCard(vacPopup(v), v[0], v[1])));
+  // card of a clicked site, in the panel under the map (a bubble on the map would cover it and block panning and zooming);
+  // the site stays circled on the map until the card is closed
+  let cardMark = null;
+  function showCard(html, lat, lon) {
+    if (cardMark) map.removeLayer(cardMark);
+    cardMark = L.circleMarker([lat, lon], { radius: 13, weight: 3, color: css("--focus"), fill: false, interactive: false }).addTo(map);
+    panel.innerHTML = `<div class="frow" style="justify-content:flex-end"><button type="button" class="btn" id="cardClose">Fermer la fiche</button></div>${html}`;
+    panel.scrollTop = 0;
+    document.getElementById("cardClose").onclick = closeCard;
+    const b = panel.querySelector("[data-group]");
+    if (b) b.addEventListener("click", () => { const g = b.dataset.group; closeCard(); selectGroup(PSEUDO[g] ? g : +g, true); });
+  }
+  function closeCard() { if (cardMark) { map.removeLayer(cardMark); cardMark = null; } refreshPanel(); }
   const sizeFor = z => z < 7 ? 3.2 : z < 9 ? 4.2 : z < 11 ? 5.5 : 7;
   map.on("zoomend", () => { const r = sizeFor(map.getZoom()); markers.forEach(m => m.setRadius(m instanceof Square ? r * 0.86 : r)); });
 
@@ -810,7 +819,8 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
   // =====================================================================================
   // RENDER — map points, counts, table, panel
   // =====================================================================================
-  let vacList = [];   // indices in V of the vacant warehouses that pass the geography and search filters
+  let vacList = [], lastVac = [];   // indices in V of the vacant warehouses that pass the geography and search filters
+  function refreshPanel() { if (cardMark) { map.removeLayer(cardMark); cardMark = null; } if (sel === VAC) vacantPanel(); else if (sel !== null) groupPanel(); else overviewPanel(lastVac); }
   function render(fit) {
     const tc = {}, cc = {};
     shown = [];
@@ -829,7 +839,7 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
     document.querySelectorAll("[data-n]").forEach(el => { const v = el.dataset.n; el.textContent = (tc[v] ?? cc[v] ?? 0).toLocaleString("fr-FR"); });
     drawPoints(vacShown);
     renderTable();
-    if (sel === VAC) vacantPanel(); else if (sel !== null) groupPanel(); else overviewPanel(vacShown);
+    lastVac = vacShown; refreshPanel();
     if (fit && shown.length) map.fitBounds(L.latLngBounds(fitPts(shown)).pad(0.1), { maxZoom: 11 });
   }
   function drawPoints(vacShown) {
@@ -856,7 +866,7 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
         <div class="kpi"><div class="k">Emprise bâtie cumulée${vacArea ? `, dont vacants ${m2(vacArea)}` : ""}</div><div class="v">${m2(area)}</div></div>
         <div class="kpi"><div class="k">Avec client du 3PL</div><div class="v">${nf(cl)}</div></div></div>
       <div class="bars">${top.map(([r, n]) => `<div class="bar"><span>${esc(r)}</span><i style="width:${Math.max(4, n / max * 100)}%"></i><span>${nf(n)}</span></div>`).join("")}</div>
-      <p class="note">Choisissez une ligne du tableau pour isoler un groupe sur la carte, ou cliquez sur un point pour sa fiche.
+      <p class="note">Choisissez une ligne du tableau pour isoler un groupe sur la carte, ou cliquez sur un point : sa fiche s'affiche ici.
         ${nvac ? `${nf(nvac)} entrepôts probablement vacants sont aussi affichés (cercles violets en pointillé).` : ""}</p>
       <p class="note">Rond plein : 3PL. Carré : entrepôt en propre (industriel ou distributeur). Cercle violet en pointillé : entrepôt probablement vacant (exploitant parti, bâtiment toujours présent). Anneau vert : client du 3PL connu sur le site (plein : confirmé ou probable ; pointillé : hypothèse) ; anneau gris : relation terminée. Les sites « à vérifier » proviennent de SIRENE seul. Chiffre d'affaires, catégorie, effectif et activité sont ceux de la société exploitante. Emprise bâtie : bâtiment RNB rattaché au point. Volume ICPE : rubrique 1510. Construction, hauteur, matériaux et propriétaire du bâtiment : BDNB (CSTB, millésime ${esc((window.BDNB || {}).m || "")}), rapprochée par les parcelles du bâtiment RNB. Fonds : Plan IGN (couleur, gris, atténué, HD) et photographies aériennes (Géoplateforme, sans clé) ; fond simplifié : routes © OpenStreetMap, limites IGN / INSEE.</p>`;
   }
@@ -872,7 +882,7 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
       <table><thead><tr><th>Commune</th><th>Dernier exploitant</th><th class="n">Emprise</th><th class="n">Fermé le</th></tr></thead><tbody>
       ${list.slice(0, 300).map(t => `<tr tabindex="0" data-j="${t.vac}"><td><span class="nom">${esc(t.where)}</span><span class="small">${esc(V[t.vac][8] || "")}</span></td><td>${esc(t.name)}</td><td class="n">${m2(t.area)}</td><td class="n">${esc(t.closed || "–")}</td></tr>`).join("")}</tbody></table>
       ${list.length > 300 ? `<p class="note">… et ${nf(list.length - 300)} autres : filtrez par région ou département.</p>` : ""}
-      <p class="note">Entrepôts dont l'exploitant est parti (SIRET fermé) alors que le bâtiment est toujours là ; ce n'est pas une preuve de vacance. Un clic sur une ligne centre la carte ; un clic sur le cercle ouvre sa fiche.</p>`;
+      <p class="note">Entrepôts dont l'exploitant est parti (SIRET fermé) alors que le bâtiment est toujours là ; ce n'est pas une preuve de vacance. Un clic sur une ligne centre la carte ; un clic sur le cercle affiche sa fiche ici.</p>`;
     document.getElementById("back").onclick = clearSel;
     panel.querySelectorAll("tbody tr[data-j]").forEach(tr => { const v = V[+tr.dataset.j];
       const go = () => centerAt(v[0], v[1]);
@@ -899,7 +909,7 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
       ${list.map(i => `<tr tabindex="0" data-i="${i}"><td><span class="nom">${esc(S[i][13])}</span><span class="small">${esc(S[i][16])} · ${esc(D.dept[S[i][6]])}${opKey(i) !== sel ? ` · <b>autre occupant</b> (exploité par ${esc(S[i][17])})` : ""}</span></td>
         <td><span class="pill"><span class="dot ${D.type[S[i][2]] === "IN_HOUSE" ? "sq" : ""}" style="background:var(${TYPES.find(t => t[0] === D.type[S[i][2]])[2]})"></span>${esc(TLAB[D.type[S[i][2]]])}</span></td>
         <td class="n">${m2(+S[i][27])}</td><td class="n">${yearOf(S[i][12]) ?? "–"}</td><td>${RING[i] ? `<span class="ring" aria-hidden="true"></span>` : ""}</td></tr>`).join("")}</tbody></table>
-      <p class="note">Sont affichés les entrepôts retenus par les filtres où le groupe est exploitant, et ceux où une de ses sociétés est un autre occupant d'un site exploité par une autre entreprise (signalés « autre occupant »). Un clic sur une ligne centre la carte sur l'entrepôt ; un clic sur le point ouvre sa fiche. Échap ou « Tous les groupes » revient à la vue d'ensemble.</p>`;
+      <p class="note">Sont affichés les entrepôts retenus par les filtres où le groupe est exploitant, et ceux où une de ses sociétés est un autre occupant d'un site exploité par une autre entreprise (signalés « autre occupant »). Un clic sur une ligne centre la carte sur l'entrepôt ; un clic sur le point affiche sa fiche ici. Échap ou « Tous les groupes » revient à la vue d'ensemble.</p>`;
     document.getElementById("back").onclick = clearSel;
     panel.querySelectorAll("tbody tr[data-i]").forEach(tr => { const i = +tr.dataset.i;
       const go = () => centerSite(i);
@@ -935,7 +945,7 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
   }
   const centerSite = i => centerAt(S[i][0], S[i][1]);
   function clearSel() { sel = null; selSiret = null; pinned = null; map.closePopup(); render(); map.fitBounds(VIEWS["Métropole"]); }
-  document.addEventListener("keydown", e => { if (e.key === "Escape" && sel !== null) clearSel(); });
+  document.addEventListener("keydown", e => { if (e.key !== "Escape") return; if (cardMark) closeCard(); else if (sel !== null) clearSel(); });
 
   // theme changes: recolour the drawn base and the markers
   const recolor = () => { land.setStyle({ color: css("--land-line"), fillColor: css("--land") });
