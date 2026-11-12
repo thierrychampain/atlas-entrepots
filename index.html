@@ -239,7 +239,7 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
   const TLAB = Object.fromEntries(TYPES.map(t => [t[0], t[1]]));
   const CONFS = [["HIGH", "Haute"], ["MEDIUM", "Moyenne"], ["LOW", "Faible"]];
   const FR = { ON_SITE: "sur le site de l'usine", ADJACENT: "attenant à l'usine", NEARBY: "proche de l'usine", REMOTE: "déporté", UNKNOWN: "non vérifiée" };
-  const GEO = { ICPE_GEORISQUES: "coordonnées Géorisques", BAN_HOUSENUMBER: "adresse au numéro (BAN)", BAN_STREET: "rue (BAN)", BAN_LOCALITY: "lieu-dit (BAN)", COMMUNE_CENTROID: "centre de la commune" };
+  const GEO = { ICPE_GEORISQUES: "coordonnées Géorisques", BAN_HOUSENUMBER: "adresse au numéro (BAN)", BAN_STREET: "rue (BAN)", BAN_LOCALITY: "lieu-dit (BAN)", COMMUNE_CENTROID: "centre de la commune", RNB_BATIMENT: "centre du bâtiment RNB qui porte l'adresse du site" };
   const VER = { CONFIRMED: "confirmé", STORAGE_FUNCTION_CONFIRMED: "fonction de stockage confirmée", CONFIRMED_OPERATOR_TO_VERIFY: "exploitant à vérifier", TO_VERIFY: "à vérifier",
     TO_VERIFY_BUILDING_FOUND: "à vérifier, grand bâtiment présent", TO_VERIFY_SMALL_BUILDING: "à vérifier, bâtiment trop petit pour un entrepôt",
     OPERATOR_CHANGED_TO_VERIFY: "nouvel exploitant probable, à vérifier", OPERATOR_CLOSED_TO_VERIFY: "SIRET de l'exploitant fermé, aucun remplaçant trouvé" };
