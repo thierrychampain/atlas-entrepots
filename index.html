@@ -227,6 +227,7 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
 <script src="clients.js" charset="utf-8"></script>
 <script src="entreprises.js" charset="utf-8"></script>
 <script src="bdnb.js" charset="utf-8"></script>
+<script src="batiments.js" charset="utf-8"></script>
 <script>
 (function () {
   const D = window.DICT, S = window.SITES, V = window.VACANTS || [];
@@ -485,6 +486,10 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
   const vacLayer = L.layerGroup();
   const OVERLAYS = { "Entrepôts probablement vacants": vacLayer, "Parcelles cadastrales (zoom ≥ 15)": ign("CADASTRALPARCELS.PARCELLAIRE_EXPRESS", "image/png", { minZoom: 15, opacity: 0.8 }) };
   if (heat) OVERLAYS["Densité des entrepôts"] = heat;
+  // outlines of the RNB buildings of the shown sites (batiments.js, work/sites/map_batiments.py), from zoom 13
+  const BAT = window.BAT || {}, BAT_ZOOM = 13, batLayer = L.layerGroup();
+  OVERLAYS[`Contours des bâtiments (zoom ≥ ${BAT_ZOOM})`] = batLayer;
+  batLayer.addTo(map);
   BASES["Plan IGN"].addTo(map); vacLayer.addTo(map);
   L.control.layers(BASES, OVERLAYS, { position: "topright", collapsed: true }).addTo(map);
   const VIEWS = { "Métropole": [[41.3, -5.2], [51.1, 9.6]], "Corse": [[41.3, 8.5], [43.05, 9.6]], "Guadeloupe": [[15.8, -61.85], [16.55, -61.0]], "Martinique": [[14.38, -61.25], [14.9, -60.8]],
@@ -846,9 +851,20 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
     lastVac = vacShown; refreshPanel();
     if (fit && shown.length) map.fitBounds(L.latLngBounds(fitPts(shown)).pad(0.1), { maxZoom: 11 });
   }
+  const batCache = {};
+  const batPoly = (rid, color, onClick) => batCache[rid + color] || (batCache[rid + color] = L.polygon(BAT[rid].map(r => { const ll = []; for (let k = 0; k < r.length; k += 2) ll.push([r[k + 1], r[k]]); return ll; }),
+    { renderer, color, weight: 1.5, fillColor: color, fillOpacity: 0.18 }).on("click", onClick));
+  let lastVacShown = [];
   function drawPoints(vacShown) {
-    layer.clearLayers(); vacLayer.clearLayers();
+    lastVacShown = vacShown;
+    layer.clearLayers(); vacLayer.clearLayers(); batLayer.clearLayers();
     const pts = selIds();
+    // building outlines first (under the points), only near enough and in view
+    if (map.hasLayer(batLayer) && map.getZoom() >= BAT_ZOOM) {
+      const bb = map.getBounds().pad(0.3);
+      vacShown.forEach(v => { if (BAT[v[18]] && bb.contains([v[0], v[1]])) batLayer.addLayer(batPoly(v[18], css("--c-vacant"), () => showCard(vacPopup(v), v[0], v[1]))); });
+      pts.forEach(i => { const s = S[i]; if (BAT[s[28]] && bb.contains([s[0], s[1]])) batLayer.addLayer(batPoly(s[28], colorOf(s[2]), () => showCard(popup(i), s[0], s[1]))); });
+    }
     // drawing order = click order on the canvas: vacant circles first, under the warehouses, so that a click on a
     // warehouse point opens the warehouse card and not the card of a larger vacant circle nearby
     vacShown.forEach(v => vacLayer.addLayer(vacMarkers[V.indexOf(v)]));
@@ -857,7 +873,9 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
     ringed.forEach(i => layer.addLayer(markers[i]));   // sites with a known client on top
     if (heat && map.hasLayer(heat)) heat.setLatLngs(pts.map(i => [S[i][0], S[i][1], 1]));
   }
-  map.on("overlayadd", e => { if (e.layer === heat) heat.setLatLngs(shown.map(i => [S[i][0], S[i][1], 1])); });
+  map.on("overlayadd", e => { if (e.layer === heat) heat.setLatLngs(shown.map(i => [S[i][0], S[i][1], 1])); if (e.layer === batLayer) drawPoints(lastVacShown); });
+  // redraw the outlines of the area in view when the map moves (nothing to do far out)
+  map.on("moveend", () => { if (map.hasLayer(batLayer) && (map.getZoom() >= BAT_ZOOM || batLayer.getLayers().length)) drawPoints(lastVacShown); });
   const panel = document.getElementById("panel");
   function overviewPanel(vacs) {
     const nvac = vacs.length, vacArea = vacs.reduce((a, v) => a + (+v[17] || 0), 0);   // vacant warehouses count in the built area too
