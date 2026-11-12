@@ -815,7 +815,7 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
     document.querySelectorAll("[data-n]").forEach(el => { const v = el.dataset.n; el.textContent = (tc[v] ?? cc[v] ?? 0).toLocaleString("fr-FR"); });
     drawPoints(vacShown);
     renderTable();
-    if (sel === VAC) vacantPanel(); else if (sel !== null) groupPanel(); else overviewPanel(vacShown.length);
+    if (sel === VAC) vacantPanel(); else if (sel !== null) groupPanel(); else overviewPanel(vacShown);
     if (fit && shown.length) map.fitBounds(L.latLngBounds(fitPts(shown)).pad(0.1), { maxZoom: 11 });
   }
   function drawPoints(vacShown) {
@@ -831,14 +831,15 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
   }
   map.on("overlayadd", e => { if (e.layer === heat) heat.setLatLngs(shown.map(i => [S[i][0], S[i][1], 1])); });
   const panel = document.getElementById("panel");
-  function overviewPanel(nvac) {
-    const rc = {}, tcount = {}; let area = 0, cl = 0;
+  function overviewPanel(vacs) {
+    const nvac = vacs.length, vacArea = vacs.reduce((a, v) => a + (+v[17] || 0), 0);   // vacant warehouses count in the built area too
+    const rc = {}, tcount = {}; let area = vacArea, cl = 0;
     shown.forEach(i => { const s = S[i], r = D.region[s[5]] || "(non renseignée)"; rc[r] = (rc[r] || 0) + 1; tcount[D.type[s[2]]] = (tcount[D.type[s[2]]] || 0) + 1; area += +s[27] || 0; if (RING[i]) cl++; });
     const top = Object.entries(rc).sort((a, b) => b[1] - a[1]).slice(0, 8), max = top.length ? top[0][1] : 1;
     panel.innerHTML = `<div class="kpis">
-        <div class="kpi"><div class="k">Sites affichés</div><div class="v">${nf(shown.length)}</div></div>
+        <div class="kpi"><div class="k">Sites affichés${nvac ? ` + ${nf(nvac)} vacants` : ""}</div><div class="v">${nf(shown.length + nvac)}</div></div>
         <div class="kpi"><div class="k">dont 3PL</div><div class="v">${nf(tcount["3PL"] || 0)}</div></div>
-        <div class="kpi"><div class="k">Emprise bâtie cumulée</div><div class="v">${m2(area)}</div></div>
+        <div class="kpi"><div class="k">Emprise bâtie cumulée${vacArea ? `, dont vacants ${m2(vacArea)}` : ""}</div><div class="v">${m2(area)}</div></div>
         <div class="kpi"><div class="k">Avec client du 3PL</div><div class="v">${nf(cl)}</div></div></div>
       <div class="bars">${top.map(([r, n]) => `<div class="bar"><span>${esc(r)}</span><i style="width:${Math.max(4, n / max * 100)}%"></i><span>${nf(n)}</span></div>`).join("")}</div>
       <p class="note">Choisissez une ligne du tableau pour isoler un groupe sur la carte, ou cliquez sur un point pour sa fiche.
