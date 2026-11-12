@@ -310,6 +310,7 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
   const YEAR_CL = [["0", "Avant 1980", 0, 1980], ["1", "1980 à 1999", 1980, 2000], ["2", "2000 à 2009", 2000, 2010], ["3", "2010 à 2019", 2010, 2020], ["4", "2020 et après", 2020, 9999]];
   const sizeClass = (v, cl) => { const n = +v; if (!(n > 0)) return "nr"; return cl.find(x => n >= x[2] && n < x[3])[0]; };
   const ESURF = S.map(s => sizeClass(s[27], SURF_CL)), EVOL = S.map(s => sizeClass(s[23], VOL_CL)), EYEAR = S.map(s => sizeClass(yearOf(s[12]), YEAR_CL));
+  const VSURF = V.map(v => sizeClass(v[17], SURF_CL)), VVOL = V.map(v => sizeClass(v[16], VOL_CL)), VYEAR = V.map(v => sizeClass(yearOf(v[2]), YEAR_CL));   // the same classes for the vacant warehouses
   const fmtCA = k => k >= 1e6 ? (k / 1e6).toLocaleString("fr-FR", { maximumFractionDigits: 2 }) + " Md€" : k >= 1e3 ? (k / 1e3).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " M€" : k.toLocaleString("fr-FR") + " k€";
   function companyRows(i) {
     const e = E[i]; if (!e) return "";
@@ -830,13 +831,15 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
       if (pass(s, "conf", i)) cc[D.conf[s[8]]] = (cc[D.conf[s[8]]] || 0) + 1;
       if (pass(s, undefined, i)) shown.push(i);
     });
-    // vacant warehouses: geography and search filters only (no operator)
+    // vacant warehouses: geography, search and building filters (footprint, ICPE volume, construction year); no operator
     const regOk = new Set(D.region.filter((r, k) => MS.region.ok(k))), depOk = new Set(D.dept.filter((d, k) => MS.dept.ok(k)));
     const reg = MS.region.all() ? null : regOk, dep = MS.dept.all() ? null : depOk;
-    vacList = !st.types.has("VACANT") ? [] : V.map((v, j) => j).filter(j => { const v = V[j];
-      return (om || !OM_REG.has(v[7])) && (reg === null || reg.has(v[7])) && (dep === null || dep.has(v[8])) && (!qm || qm(VSEARCHN[j], VSEARCHC[j])); });
+    const vacOk = j => { const v = V[j];
+      return (om || !OM_REG.has(v[7])) && (reg === null || reg.has(v[7])) && (dep === null || dep.has(v[8]))
+        && MS.surf.ok(VSURF[j]) && MS.vol.ok(VVOL[j]) && MS.year.ok(VYEAR[j]); };
+    vacList = !st.types.has("VACANT") ? [] : V.map((v, j) => j).filter(j => vacOk(j) && (!qm || qm(VSEARCHN[j], VSEARCHC[j])));
     const vacShown = sel === null || sel === VAC ? vacList.map(j => V[j]) : [];
-    tc.VACANT = V.filter(v => (om || !OM_REG.has(v[7])) && (reg === null || reg.has(v[7])) && (dep === null || dep.has(v[8]))).length;
+    tc.VACANT = V.filter((v, j) => vacOk(j)).length;
     document.querySelectorAll("[data-n]").forEach(el => { const v = el.dataset.n; el.textContent = (tc[v] ?? cc[v] ?? 0).toLocaleString("fr-FR"); });
     drawPoints(vacShown);
     renderTable();
