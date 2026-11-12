@@ -525,7 +525,8 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
   let cardMark = null;
   function showCard(html, lat, lon) {
     if (cardMark) map.removeLayer(cardMark);
-    cardMark = L.circleMarker([lat, lon], { radius: 13, weight: 3, color: css("--focus"), fill: false, interactive: false }).addTo(map);
+    // same canvas as the points: a circle on a canvas of its own would lie over the whole map and swallow the next clicks
+    cardMark = L.circleMarker([lat, lon], { renderer, radius: 13, weight: 3, color: css("--focus"), fill: false, interactive: false }).addTo(map);
     panel.innerHTML = `<div class="frow" style="justify-content:flex-end"><button type="button" class="btn" id="cardClose">Fermer la fiche</button></div>${html}`;
     panel.scrollTop = 0;
     document.getElementById("cardClose").onclick = closeCard;
@@ -940,7 +941,7 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
     map.closePopup();
     map.setView([lat, lon], Math.max(map.getZoom(), 15));
     if (flash) map.removeLayer(flash);
-    flash = L.circleMarker([lat, lon], { radius: 16, weight: 3, color: css("--focus"), fill: false, interactive: false }).addTo(map);
+    flash = L.circleMarker([lat, lon], { renderer, radius: 16, weight: 3, color: css("--focus"), fill: false, interactive: false }).addTo(map);
     const f = flash; setTimeout(() => { if (flash === f) { map.removeLayer(f); flash = null; } }, 2500);
   }
   const centerSite = i => centerAt(S[i][0], S[i][1]);
