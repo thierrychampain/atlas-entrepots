@@ -910,8 +910,8 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
     if (fit && shown.length) map.fitBounds(L.latLngBounds(fitPts(shown)).pad(0.1), { maxZoom: 11 });
   }
   const batCache = {};
-  const batPoly = (rid, color, onClick) => batCache[rid + color] || (batCache[rid + color] = L.polygon(BAT[rid].map(r => { const ll = []; for (let k = 0; k < r.length; k += 2) ll.push([r[k + 1], r[k]]); return ll; }),
-    { renderer, color, weight: 1.5, fillColor: color, fillOpacity: 0.18 }).on("click", onClick));
+  const batPoly = (rid, color, onClick, ghost) => batCache[rid + color + (ghost ? "g" : "")] || (batCache[rid + color + (ghost ? "g" : "")] = L.polygon(BAT[rid].map(r => { const ll = []; for (let k = 0; k < r.length; k += 2) ll.push([r[k + 1], r[k]]); return ll; }),
+    { renderer, color, weight: 1.5, opacity: ghost ? 0.5 : 1, fillColor: color, fillOpacity: ghost ? 0.09 : 0.18 }).on("click", onClick));
   let lastVacShown = [];
   function drawPoints(vacShown) {
     lastVacShown = vacShown;
@@ -920,6 +920,14 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
     // neighbours outside the segment, drawn first so that they stay under the segment points (and under their clicks)
     if (map.getZoom() >= GHOST_ZOOM) {
       const bb = map.getBounds().pad(0.2), inSeg = new Set(pts), r = sizeFor(map.getZoom());
+      // building outlines of those neighbours, half transparent too, under everything (a building also in the segment keeps its full outline)
+      if (map.hasLayer(batLayer) && map.getZoom() >= BAT_ZOOM) {
+        const ridsOf = i => S[i][35] ? S[i][35].split(",") : [S[i][28]];
+        const segR = new Set(pts.flatMap(ridsOf)), vs = new Set(vacShown); vacShown.forEach(v => segR.add(v[18]));
+        if (map.hasLayer(vacLayer)) V.forEach(v => { if (!vs.has(v) && BAT[v[18]] && !segR.has(v[18]) && bb.contains([v[0], v[1]])) ghostLayer.addLayer(batPoly(v[18], css("--c-vacant"), () => showCard(vacPopup(v), v[0], v[1]), true)); });
+        S.forEach((s, i) => { if (inSeg.has(i) || !bb.contains([s[0], s[1]])) return;
+          ridsOf(i).forEach(rid => { if (BAT[rid] && !segR.has(rid)) { segR.add(rid); ghostLayer.addLayer(batPoly(rid, colorOf(s[2]), () => showCard(popup(i), s[0], s[1]), true)); } }); });
+      }
       if (map.hasLayer(vacLayer)) { const vs = new Set(vacShown);
         V.forEach(v => { if (!vs.has(v) && bb.contains([v[0], v[1]])) ghostLayer.addLayer(L.circleMarker([v[0], v[1]], { renderer, radius: 5.5, weight: 2, dashArray: "3 2",
           color: css("--c-vacant"), opacity: 0.5, fillColor: css("--c-vacant"), fillOpacity: 0.06 }).on("click", () => showCard(vacPopup(v), v[0], v[1]))); }); }
