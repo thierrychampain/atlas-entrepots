@@ -503,6 +503,8 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
   const BAT = window.BAT || {}, BAT_ZOOM = 13, batLayer = L.layerGroup();
   OVERLAYS[`Contours des bâtiments (zoom ≥ ${BAT_ZOOM})`] = batLayer;
   batLayer.addTo(map);
+  // sites outside the segment (filters, selection), shown half transparent around the segment when zoomed in, hidden below
+  const GHOST_ZOOM = 12, ghostLayer = L.layerGroup().addTo(map);
   BASES["Plan IGN"].addTo(map); vacLayer.addTo(map);
   L.control.layers(BASES, OVERLAYS, { position: "topright", collapsed: true }).addTo(map);
   const VIEWS = { "Métropole": [[41.3, -5.2], [51.1, 9.6]], "Corse": [[41.3, 8.5], [43.05, 9.6]], "Guadeloupe": [[15.8, -61.85], [16.55, -61.0]], "Martinique": [[14.38, -61.25], [14.9, -60.8]],
@@ -913,8 +915,19 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
   let lastVacShown = [];
   function drawPoints(vacShown) {
     lastVacShown = vacShown;
-    layer.clearLayers(); vacLayer.clearLayers(); batLayer.clearLayers();
+    layer.clearLayers(); vacLayer.clearLayers(); batLayer.clearLayers(); ghostLayer.clearLayers();
     const pts = selIds();
+    // neighbours outside the segment, drawn first so that they stay under the segment points (and under their clicks)
+    if (map.getZoom() >= GHOST_ZOOM) {
+      const bb = map.getBounds().pad(0.2), inSeg = new Set(pts), r = sizeFor(map.getZoom());
+      if (map.hasLayer(vacLayer)) { const vs = new Set(vacShown);
+        V.forEach(v => { if (!vs.has(v) && bb.contains([v[0], v[1]])) ghostLayer.addLayer(L.circleMarker([v[0], v[1]], { renderer, radius: 5.5, weight: 2, dashArray: "3 2",
+          color: css("--c-vacant"), opacity: 0.5, fillColor: css("--c-vacant"), fillOpacity: 0.06 }).on("click", () => showCard(vacPopup(v), v[0], v[1]))); }); }
+      S.forEach((s, i) => { if (inSeg.has(i) || !bb.contains([s[0], s[1]])) return;
+        const o = Object.assign({ renderer, radius: r, fillColor: colorOf(s[2]), fillOpacity: 0.44 }, ringStyle(i), { opacity: 0.5 });
+        const m = D.type[s[2]] === "IN_HOUSE" ? new Square([s[0], s[1]], Object.assign(o, { radius: r * 0.86 })) : L.circleMarker([s[0], s[1]], o);
+        ghostLayer.addLayer(m.on("click", () => showCard(popup(i), s[0], s[1]))); });
+    }
     // building outlines first (under the points), only near enough and in view
     if (map.hasLayer(batLayer) && map.getZoom() >= BAT_ZOOM) {
       const bb = map.getBounds().pad(0.3);
@@ -932,7 +945,7 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
   }
   map.on("overlayadd", e => { if (e.layer === heat) heat.setLatLngs(shown.map(i => [S[i][0], S[i][1], 1])); if (e.layer === batLayer) drawPoints(lastVacShown); });
   // redraw the outlines of the area in view when the map moves (nothing to do far out)
-  map.on("moveend", () => { if (map.hasLayer(batLayer) && (map.getZoom() >= BAT_ZOOM || batLayer.getLayers().length)) drawPoints(lastVacShown); });
+  map.on("moveend", () => { if ((map.hasLayer(batLayer) && (map.getZoom() >= BAT_ZOOM || batLayer.getLayers().length)) || map.getZoom() >= GHOST_ZOOM || ghostLayer.getLayers().length) drawPoints(lastVacShown); });
   const panel = document.getElementById("panel");
   function overviewPanel(vacs) {
     const nvac = vacs.length, vacArea = vacs.reduce((a, v) => a + (+v[17] || 0), 0);   // vacant warehouses count in the built area too
