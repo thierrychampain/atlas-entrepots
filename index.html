@@ -403,6 +403,7 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
       <dl>
         ${row("Surface bâtie", s[27] ? `<span class="mono">${Number(s[27]).toLocaleString("fr-FR")} m²</span> <span class="note">(${(s[33] || "RNB") === "RNB" && s[35] && s[35].includes(",") ? `somme des emprises des ${s[35].split(",").length} bâtiments RNB du site` : (SURF_SRC[s[33]] || "emprise du bâtiment RNB") + ((s[33] || "RNB") === "RNB" && s[28] ? " " + esc(s[28]) : "")})</span>` + (s[34] ? `<br><span class="note">${esc(s[34])}</span>` : "") : (s[29] === "NO_BUILDING_FOUND" ? `<span class="note">aucun bâtiment RNB trouvé au point</span>` : ""))}
         ${row("Bâtiments", s[36] ? `${s[35].split(",").length} bâtiments RNB<br><span class="note">${esc(s[36])}</span>` : "")}
+        ${row("Agrément sanitaire", s[37] ? `${(s[38] || "").includes("(CS)") ? "<b>entrepôt frigorifique agréé</b><br>" : ""}<span class="mono">${esc(s[37])}</span> <span class="note">(${esc((s[38] || "").replaceAll(";", ", "))} ; <a href="https://fichiers-publics.agriculture.gouv.fr/dgal/ListesOfficielles/ETAB_AGR_853.pdf" target="_blank" rel="noopener">liste DGAL 853/2004</a>)</span>` : "")}
         ${row("Volume ICPE", s[23] ? `<span class="mono">${Number(s[23]).toLocaleString("fr-FR")} m³</span> (rubrique 1510)` : "")}
         ${bdnbRows(s[12]) || row("Construction", `<span class="note">bâtiment absent de la BDNB</span>`)}
         ${row("Propriétaire", esc(s[20]))}
