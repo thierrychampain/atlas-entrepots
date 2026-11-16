@@ -194,6 +194,7 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
         <div class="fld"><span>Département</span><div id="dept"></div></div>
         <div class="fld"><span>Secteur</span><div id="sector"></div></div>
         <div class="fld"><span>Sous-type</span><div id="sub"></div></div>
+        <div class="fld" title="Agrément sanitaire européen (règlement CE 853/2004), liste officielle de la DGAL"><span>Agrément sanitaire (DGAL)</span><div id="san"></div></div>
       </div>
       <details class="more"><summary>Taille de l'entrepôt et société exploitante</summary>
         <div class="selects" style="margin-top:6px">
@@ -655,6 +656,13 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
   MS.cat = MultiSelect(document.getElementById("cat"), "Toutes", onFilter());
   MS.eff = MultiSelect(document.getElementById("eff"), "Tous", onFilter());
   MS.naf = MultiSelect(document.getElementById("naf"), "Toutes", onFilter());
+  MS.san = MultiSelect(document.getElementById("san"), "Tous", onFilter());
+  // keys of each site for the sanitary approval filter: "any" when approved, then each activity code; "none" otherwise
+  const SANK = S.map(s => s[37] ? ["any", ...new Set((s[38] || "").split(";").map(c => (c.match(/\((\w+)\)$/) || [])[1]).filter(Boolean))] : ["none"]);
+  { const n = {}; SANK.forEach(ks => ks.forEach(k => n[k] = (n[k] || 0) + 1)); const f = k => (n[k] || 0).toLocaleString("fr-FR");
+    MS.san.setItems([["any", `Tous les sites agréés (${f("any")})`], ["CS", `Entrepôt frigorifique agréé (${f("CS")})`]]
+      .concat(Object.keys(n).filter(k => !["any", "none", "CS"].includes(k)).sort((a, b) => n[b] - n[a]).map(k => [k, `${SAN_ACT[k] ? SAN_ACT[k][0].toUpperCase() + SAN_ACT[k].slice(1) : k} (${f(k)})`]))
+      .concat([["none", `Sans agrément sanitaire (${f("none")})`]])); }
   const fillRegions = () => MS.region.setItems(sortFr(D.region.map((r, i) => [i, r || "(non renseignée)"]).filter(([, r]) => om || !OM_REG.has(r))));
   fillRegions();
   function setOm(on) {
@@ -713,6 +721,7 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
     if (!MS.region.ok(s[5]) || !MS.dept.ok(s[6]) || !MS.sector.ok(s[4]) || !MS.sub.ok(s[3])) return false;
     if (qm && !qm(SEARCHN[i], SEARCHC[i])) return false;
     if (st.clientOnly && !RING[i]) return false;
+    if (!MS.san.all() && !SANK[i].some(k => MS.san.sel.has(k))) return false;
     if (!MS.ca.ok(ECA[i]) || !MS.cat.ok(ECAT[i]) || !MS.eff.ok(EEFF[i]) || !MS.naf.ok(ENAF[i])) return false;
     if (!MS.surf.ok(ESURF[i]) || !MS.vol.ok(EVOL[i]) || !MS.year.ok(EYEAR[i])) return false;
     return true;
@@ -890,8 +899,8 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
       head = ["groupe", "sites", ...TYPES.map(t => "sites_" + t[0].toLowerCase()), "emprise_totale_m2", "plus_grand_site_m2", "sites_avec_client_3pl", "annee_construction_mediane", "ca_max_keur", "region_principale", "nb_regions"];
       lines = rows.map(g => [g.name, g.ids.length, ...TYPES.map(t => g.tc[t[0]] || 0), Math.round(g.area), Math.round(g.big), g.cl, g.year, g.ca, g.region, g.nreg].map(q).join(";"));
     } else {
-      head = ["id", "entrepot", "type", "sous_type", "exploitant", "siren", "groupe", "adresse", "code_postal", "commune", "departement", "region", "emprise_m2", "volume_icpe_m3", "annee_construction", "client_3pl", "confiance", "latitude", "longitude"];
-      lines = rows.map(i => { const s = S[i]; return [s[12], s[13], TLAB[D.type[s[2]]], D.sub[s[3]], s[17], s[18], gname(s[7]), s[14], s[15], s[16], D.dept[s[6]], D.region[s[5]], s[27], s[23], yearOf(s[12]), RING[i] ? "oui" : "", D.conf[s[8]], s[0], s[1]].map(q).join(";"); });
+      head = ["id", "entrepot", "type", "sous_type", "exploitant", "siren", "groupe", "adresse", "code_postal", "commune", "departement", "region", "emprise_m2", "volume_icpe_m3", "annee_construction", "client_3pl", "agrement_sanitaire", "activites_agreees", "confiance", "latitude", "longitude"];
+      lines = rows.map(i => { const s = S[i]; return [s[12], s[13], TLAB[D.type[s[2]]], D.sub[s[3]], s[17], s[18], gname(s[7]), s[14], s[15], s[16], D.dept[s[6]], D.region[s[5]], s[27], s[23], yearOf(s[12]), RING[i] ? "oui" : "", s[37] || "", s[38] || "", D.conf[s[8]], s[0], s[1]].map(q).join(";"); });
     }
     const blob = new Blob(["﻿" + head.join(";") + "\n" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = view === "group" ? "atlas_entrepots_groupes.csv" : view === "client" ? "atlas_chargeurs_prestataires.csv" : "atlas_entrepots_sites.csv";
@@ -916,7 +925,7 @@ tbody tr.more td { font-size: 11.5px; color: var(--muted); padding-left: 24px; c
     const reg = MS.region.all() ? null : regOk, dep = MS.dept.all() ? null : depOk;
     const vacOk = j => { const v = V[j];
       return (om || !OM_REG.has(v[7])) && (reg === null || reg.has(v[7])) && (dep === null || dep.has(v[8]))
-        && MS.surf.ok(VSURF[j]) && MS.vol.ok(VVOL[j]) && MS.year.ok(VYEAR[j]); };
+        && MS.surf.ok(VSURF[j]) && MS.vol.ok(VVOL[j]) && MS.year.ok(VYEAR[j]) && (MS.san.all() || MS.san.sel.has("none")); };
     vacList = !st.types.has("VACANT") ? [] : V.map((v, j) => j).filter(j => vacOk(j) && (!qm || qm(VSEARCHN[j], VSEARCHC[j])));
     const vacShown = sel === null || sel === VAC ? vacList.map(j => V[j]) : [];
     tc.VACANT = V.filter((v, j) => vacOk(j)).length;
